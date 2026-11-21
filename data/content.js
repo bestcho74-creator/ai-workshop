@@ -2,7 +2,7 @@
    직접 고쳐도 됩니다. *별표* 로 감싼 글자는 강조색, [대괄호] 는 프롬프트의 바꿔 쓸 부분입니다. */
 window.CONTENT = {
   "id": "ai-tips-teacher-2026",
-  "rev": 1795300000003,
+  "rev": 1795300000004,
   "theme": {
     "accent": "#4B4DED",
     "ambient": "sparkle"
@@ -1212,16 +1212,28 @@ window.CONTENT = {
         },
         {
           "layout": "gallery",
-          "kicker": "제가 만든 것들 · 세로 영상",
+          "kicker": "제가 만든 것들 · 교권 영상 하나",
           "title": "힉스필드로 *이런 영상*을 만들었습니다",
           "items": [
             { "src": "assets/img/hf/mentos.mp4", "label": "멘토스 실험 영상", "text": "‘3시 하교’ 정책을 콜라 실험에 빗댄 30초" },
-            { "src": "assets/img/hf/rally-poster.mp4", "label": "집회 홍보 영상", "text": "포스터가 펼쳐지는 7초 한 장면" },
-            { "src": "assets/img/hf/book-promo.mp4", "label": "책 홍보 영상", "text": "표지 그림으로 만든 20초" },
-            { "src": "assets/img/hf/watercolor-mv.mp4", "label": "뮤직비디오 한 장면", "text": "수채화 만화 그림체" }
+            { "src": "assets/img/hf/squishy.mp4", "label": "말랑이 실험 영상", "text": "‘3시 하교’라 적은 공을 쥐어 부수는 15초" },
+            { "src": "assets/img/hf/brick-satire.mp4", "label": "브릭 스톱모션", "text": "‘3시 하교’ 풍자, 30초 두 편을 이은 1분" },
+            { "src": "assets/img/hf/confucius.mp4", "label": "공자 교실 풍자", "text": "옛 교실에서 요즘 교실로 넘어가는 30초" }
           ],
           "cols": "4",
-          "notes": "영상을 누르면 크게, 소리와 함께 볼 수 있습니다. 모두 채팅창에서 말로 시켜 만든 것입니다. 멘토스 영상은 5초짜리 장면 여섯 개를 차례로 이어 붙인 것이고, 집회 홍보 영상은 포스터 그림과 마스코트 그림을 주고 만든 7초 한 장면입니다."
+          "notes": "영상을 누르면 크게, 소리와 함께 볼 수 있습니다. 모두 채팅창에서 말로 시켜 만든 것입니다. 멘토스와 말랑이 영상은 5초짜리 장면을 차례로 이어 붙인 것이고, 브릭 스톱모션은 30초짜리 앞편과 뒤편을 이은 것입니다. 긴 영상도 짧은 장면을 나눠 만들어 잇는다는 점을 짚어 주세요."
+        },
+        {
+          "layout": "gallery",
+          "kicker": "제가 만든 것들 · 교권 영상 둘",
+          "title": "*캠페인과 공익광고*도 만들었습니다",
+          "items": [
+            { "src": "assets/img/hf/rally-poster.mp4", "label": "집회 홍보 영상", "text": "포스터가 펼쳐지는 7초 한 장면" },
+            { "src": "assets/img/hf/exam-campaign.mp4", "label": "수능 감독 캠페인", "text": "카드뉴스 여섯 장을 움직이게 만든 30초" },
+            { "src": "assets/img/hf/teacher-psa.mp4", "label": "교권 보호 공익광고", "text": "실제 촬영처럼 만든 30초" }
+          ],
+          "cols": "3",
+          "notes": "집회 홍보 영상은 포스터 그림과 마스코트 그림을 주고 만든 한 장면입니다. 수능 감독 캠페인은 카드뉴스 그림 여섯 장을 각각 5초 영상으로 만들어 이었습니다. 공익광고 속 인물은 실제 사람이 아니라 AI가 만든 가상의 인물이라는 점을 꼭 말해 주세요."
         },
         {
           "layout": "gallery",
@@ -1238,15 +1250,17 @@ window.CONTENT = {
         },
         {
           "layout": "gallery",
-          "kicker": "제가 만든 것들 · 캐릭터와 행사",
+          "kicker": "제가 만든 것들 · 홍보와 캐릭터",
           "title": "캐릭터가 있으면 *영상도 쉬워집니다*",
           "items": [
+            { "src": "assets/img/hf/book-promo.mp4", "label": "책 홍보 영상", "text": "표지 그림으로 만든 20초" },
+            { "src": "assets/img/hf/watercolor-mv.mp4", "label": "뮤직비디오 한 장면", "text": "수채화 만화 그림체" },
             { "src": "assets/img/hf/ani-ad.mp4", "label": "캐릭터 광고 영상", "text": "그림 넉 장을 이어 만든 20초" },
             { "src": "assets/img/hf/xmas-dance.mp4", "label": "행사 축하 영상", "text": "크리스마스 춤 7초" },
             { "src": "assets/img/hf/plush-bow.mp4", "label": "마스코트 인사", "text": "그림 한 장을 5초 영상으로" },
             { "src": "assets/img/hf/mascot-loop.mp4", "label": "움직이는 로고 캐릭터", "text": "끊김 없이 되풀이되는 15초" }
           ],
-          "cols": "4",
+          "cols": "3",
           "notes": "지난 시간에 만든 캐릭터 그림 한 장이 영상의 출발점이 됩니다. 영상을 누르면 크게 볼 수 있습니다."
         },
         {

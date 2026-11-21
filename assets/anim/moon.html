@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>달의 모양 변화</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 배치: 16:9 화면 한 장에 꽉 차는 세 줄
+   제목 띠 / 두 장면(왼쪽: 우주에서 본 지구와 달 · 오른쪽: 지구에서 본 달) / 날짜 조종대 */
+:root{
+  --sky-0:#04060f; --sky-1:#0b1330; --sky-2:#18245a;
+  --ink:#eef2fb; --ink-dim:#a6b2d2;
+  --line:rgba(170,190,240,.24); --soft:rgba(170,190,240,.12); --bar:rgba(7,10,26,.8);
+  --moon:#f7f0d8; --moon-hi:#fffbea; --moon-lo:#d9cea8; --moon-mare:#a79d80; --moon-shade:#1b2240;
+  --sun:#ffb648; --sun-glow:rgba(255,182,72,.16);
+  --look:#7fd8ff;
+  --accent:#ffd66b; --accent-glow:rgba(255,214,107,.5); --on-accent:#1b1604;
+  --sea:#2f7fd1; --land:#5bbd7e; --night:rgba(4,6,15,.72);
+
+  --font-display:"Jua","Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --font-body:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic","Nanum Gothic",sans-serif;
+
+  --u:min(1vw,1.7778vh);                         /* 16:9 화면에서 가로의 1% */
+  --pad:calc(var(--u)*2.2);
+  --fs-title:max(1.3rem,calc(var(--u)*2.5));
+  --fs-h2:max(1rem,calc(var(--u)*1.6));
+  --fs-body:max(.85rem,calc(var(--u)*1.2));
+  --fs-small:max(.75rem,calc(var(--u)*1.1));
+  --fs-name:max(2.2rem,calc(var(--u)*5.4));
+  --fs-date:max(1.7rem,calc(var(--u)*3.2));
+  --fs-btn:max(.95rem,calc(var(--u)*1.5));
+  --thumb:max(26px,calc(var(--u)*2.2));
+  --track:max(8px,calc(var(--u)*.55));
+  --mark-ico:max(20px,calc(var(--u)*2.3));
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{margin:0;background:var(--sky-0);color:var(--ink);font-family:var(--font-body);font-size:var(--fs-body);line-height:1.5;-webkit-font-smoothing:antialiased}
+#stars{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;
+  background:radial-gradient(120% 85% at 72% 0%,var(--sky-2) 0%,var(--sky-1) 42%,var(--sky-0) 100%)}
+
+.app{position:relative;z-index:1;box-sizing:border-box;height:100%;min-height:30rem;display:grid;grid-template-rows:auto minmax(0,1fr) auto}
+.gut{padding-left:max(16px,var(--pad),env(safe-area-inset-left,0px));padding-right:max(16px,var(--pad),env(safe-area-inset-right,0px))}
+
+/* 제목 띠 */
+.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:.2em calc(var(--u)*1.4);padding-block:calc(var(--u)*1.1) calc(var(--u)*.5)}
+.top h1{margin:0;font-family:var(--font-display);font-weight:400;font-size:var(--fs-title);line-height:1.2;letter-spacing:.01em}
+.unit{margin:0;color:var(--ink-dim);font-size:var(--fs-small);font-weight:500}
+.ghost{margin-left:auto;font:inherit;font-size:var(--fs-small);font-weight:500;color:var(--ink-dim);background:transparent;border:1px solid var(--line);border-radius:999px;padding:.35em 1em;cursor:pointer}
+.ghost:hover{color:var(--ink);border-color:var(--ink-dim)}
+
+/* 두 장면 */
+.stage{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);min-height:0}
+.panel{position:relative;display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-width:0;min-height:0;padding-block:calc(var(--u)*.6)}
+.panel h2{margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:0 .6em;font-family:var(--font-display);font-weight:400;font-size:var(--fs-h2);line-height:1.3}
+.panel h2 small{font-family:var(--font-body);font-size:var(--fs-small);font-weight:500;color:var(--ink-dim)}
+.space{isolation:isolate;padding-right:calc(var(--u)*1.2)}
+.space::before{content:"";position:absolute;z-index:-1;top:0;bottom:0;left:calc(-1*max(16px,var(--pad)));width:44%;background:linear-gradient(90deg,var(--sun-glow),transparent)}
+.sky{border-left:1px solid var(--line);padding-left:calc(var(--u)*2)}
+.orbit,.moonview{display:block;width:100%;height:100%;min-height:0}
+
+.legend{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:.1em 1.5em;font-size:var(--fs-small)}
+.legend li{display:flex;align-items:center;gap:.5em}
+.legend .note{color:var(--ink-dim)}
+.sw{flex:none;width:1em;height:1em;border-radius:50%}
+.sw-lit{background:var(--moon)}
+.sw-shade{background:var(--moon-shade);box-shadow:inset 0 0 0 1px var(--line)}
+.sw-look{box-sizing:border-box;height:.55em;border:.2em solid var(--look);border-bottom:0;border-radius:1em 1em 0 0;background:none}
+
+/* 궤도 그림 */
+.orbit text{font-family:var(--font-display)}
+.rays line{stroke:var(--sun);stroke-width:7;stroke-linecap:round}
+.f-sun{fill:var(--sun)} .f-dim{fill:var(--ink-dim)}
+.t-sun{fill:var(--sun);font-size:38px}
+.t-label{fill:var(--ink);font-size:34px;paint-order:stroke;stroke:var(--sky-0);stroke-width:7px;stroke-linejoin:round}
+.t-dim{fill:var(--ink-dim);font-size:27px;paint-order:stroke;stroke:var(--sky-0);stroke-width:7px;stroke-linejoin:round}
+.ring{fill:none;stroke:var(--line);stroke-width:2}
+.dot{fill:var(--ink-dim);opacity:.6}
+.dir{fill:none;stroke:var(--ink-dim);stroke-width:3;stroke-linecap:round}
+.sight{stroke:var(--look);stroke-width:3;stroke-dasharray:3 10;stroke-linecap:round;opacity:.8}
+.e-sea{fill:var(--sea)} .e-land{fill:var(--land)} .e-night{fill:var(--night)}
+.e-rim{fill:none;stroke:var(--look);stroke-opacity:.45;stroke-width:2}
+.m-shade{fill:var(--moon-shade)} .m-lit{fill:var(--moon)}
+.m-rim{fill:none;stroke:var(--ink-dim);stroke-opacity:.5;stroke-width:1.5}
+.face{fill:none;stroke:var(--look);stroke-width:5;stroke-linecap:round}
+
+/* 지구에서 본 달 */
+.mv-shade{fill:var(--moon-shade)}
+.mv-rim{fill:none;stroke:var(--ink-dim);stroke-opacity:.28;stroke-width:1.5}
+.maria ellipse{fill:var(--moon-mare);opacity:.5}
+.mv-spot{fill:var(--moon-hi);opacity:.75}
+
+.phase{display:grid;justify-items:center;text-align:center;padding-bottom:calc(var(--u)*.4)}
+.phase-name{margin:0;height:calc(var(--fs-name)*1.15);display:grid;place-items:center;white-space:nowrap;font-family:var(--font-display);font-weight:400;font-size:calc(var(--fs-name)*.5);line-height:1.1;color:var(--ink)}
+.phase.is-named .phase-name{font-size:var(--fs-name);color:var(--accent);text-shadow:0 0 .35em var(--accent-glow)}
+.phase-sub{margin:0;min-height:1.5em;color:var(--ink-dim);font-weight:500;text-wrap:balance}
+
+/* 날짜 조종대 */
+.controls{background:var(--bar);border-top:1px solid var(--line);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.controls-in{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;grid-template-areas:"transport date timeline speed";align-items:center;gap:8px calc(var(--u)*1.8);padding-block:calc(var(--u)*.8) calc(var(--u)*.9)}
+.transport{grid-area:transport;display:flex;gap:calc(var(--u)*.7 + 4px)}
+.btn{display:inline-flex;align-items:center;gap:.45em;font-family:var(--font-display);font-size:var(--fs-btn);line-height:1.2;white-space:nowrap;color:var(--on-accent);background:var(--accent);border:2px solid var(--accent);border-radius:999px;padding:.5em 1.05em .5em .9em;cursor:pointer;box-shadow:0 0 1.1em var(--accent-glow)}
+.btn svg{width:.8em;height:.8em;fill:currentColor}
+.btn[aria-disabled="true"]{color:var(--ink-dim);background:transparent;border-color:var(--line);box-shadow:none;cursor:default}
+.btn:focus-visible,.ghost:focus-visible,.mark:focus-visible{outline:3px solid var(--look);outline-offset:3px}
+
+.date{grid-area:date;display:flex;align-items:baseline;gap:.2em;white-space:nowrap;font-family:var(--font-display)}
+.date-k{font-size:calc(var(--fs-date)*.5);color:var(--ink-dim)}
+.date-n{min-width:1.15em;text-align:right;font-size:var(--fs-date);line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+
+.timeline{grid-area:timeline;position:relative;min-width:0}
+.marks{position:relative;height:calc(var(--mark-ico) + var(--fs-small)*1.4 + 18px)}
+.mark{position:absolute;bottom:9px;left:calc(var(--thumb)/2 + (100% - var(--thumb))*var(--c));transform:translateX(-50%);display:grid;justify-items:center;gap:.1em;padding:.1em .35em;font-family:var(--font-display);font-size:var(--fs-small);line-height:1.3;white-space:nowrap;color:var(--ink-dim);background:none;border:0;border-radius:.6em;cursor:pointer}
+.mark svg{width:var(--mark-ico);height:var(--mark-ico);opacity:.75}
+.mark:hover{color:var(--ink)}
+.mark.on{color:var(--accent)}
+.mark.on svg{opacity:1;filter:drop-shadow(0 0 .45em var(--accent-glow))}
+.mi-shade{fill:var(--moon-shade);stroke:var(--line);stroke-width:.8} .mi-lit{fill:var(--moon)}
+.span{position:absolute;bottom:1px;height:4px;border-radius:4px;background:var(--line);left:calc(var(--thumb)/2 + (100% - var(--thumb))*var(--a) - 6px);width:calc((100% - var(--thumb))*(var(--b) - var(--a)) + 12px)}
+.span.on{background:var(--accent);box-shadow:0 0 .6em var(--accent-glow)}
+
+#day{-webkit-appearance:none;appearance:none;display:block;width:100%;height:var(--thumb);margin:0;background:transparent;cursor:pointer;--p:0}
+#day:focus{outline:none}
+#day::-webkit-slider-runnable-track{height:var(--track);border-radius:999px;background:linear-gradient(90deg,var(--accent) calc(var(--thumb)/2 + (100% - var(--thumb))*var(--p)),var(--line) 0)}
+#day::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:var(--thumb);height:var(--thumb);margin-top:calc((var(--track) - var(--thumb))/2);border:0;border-radius:50%;background:radial-gradient(circle at 36% 34%,var(--moon-hi),var(--accent));box-shadow:0 0 0 .2em var(--soft),0 0 1em var(--accent-glow)}
+#day::-moz-range-track{height:var(--track);border-radius:999px;background:var(--line)}
+#day::-moz-range-progress{height:var(--track);border-radius:999px;background:var(--accent)}
+#day::-moz-range-thumb{width:var(--thumb);height:var(--thumb);border:0;border-radius:50%;background:radial-gradient(circle at 36% 34%,var(--moon-hi),var(--accent));box-shadow:0 0 0 .2em var(--soft),0 0 1em var(--accent-glow)}
+#day:focus-visible::-webkit-slider-thumb{outline:3px solid var(--look);outline-offset:3px}
+#day:focus-visible::-moz-range-thumb{outline:3px solid var(--look);outline-offset:3px}
+
+.ticks{position:relative;height:calc(var(--fs-small)*1.9)}
+.tick{position:absolute;top:2px;left:calc(var(--thumb)/2 + (100% - var(--thumb))*var(--t));transform:translateX(-50%);display:grid;justify-items:center;font-size:var(--fs-small);line-height:1;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.tick::before{content:"";width:2px;height:.4em;margin-bottom:.25em;border-radius:2px;background:var(--line)}
+
+.speed{grid-area:speed;display:grid;justify-items:center;gap:.25em}
+.speed-label{font-size:var(--fs-small);font-weight:500;color:var(--ink-dim)}
+.seg{position:relative;display:flex;padding:3px;border:1px solid var(--line);border-radius:999px}
+.seg input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.seg label{font-family:var(--font-display);font-size:var(--fs-small);line-height:1.3;white-space:nowrap;color:var(--ink-dim);padding:.3em .8em;border-radius:999px;cursor:pointer}
+.seg input:checked+label{background:var(--soft);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.seg input:focus-visible+label{outline:3px solid var(--look);outline-offset:2px}
+
+/* 좁은 화면: 한 줄로 쌓고, 조종대는 아래에 붙여 둔다 */
+@media (max-width:820px),(max-aspect-ratio:1/1){
+  .app{height:auto;min-height:100%}
+  .stage{grid-template-columns:minmax(0,1fr)}
+  .panel{padding-block:14px}
+  .space{padding-right:0}
+  .sky{border-left:0;border-top:1px solid var(--line);padding-left:0}
+  .orbit{height:auto;aspect-ratio:1070/760;max-height:46vh}
+  .sky{grid-template-columns:minmax(0,min(42%,16rem)) minmax(0,1fr);grid-template-rows:auto auto;column-gap:16px;align-items:center}
+  .sky h2{grid-column:1/-1;margin-bottom:8px}
+  .moonview{height:auto;aspect-ratio:1}
+  .phase{justify-items:start;text-align:left;padding-bottom:0}
+  .phase-name{height:auto;min-height:calc(var(--fs-name)*1.15);place-items:center start;white-space:normal;text-wrap:balance}
+  .controls{position:sticky;bottom:0}
+  .controls-in{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"transport date" "timeline timeline" "speed speed";padding-block:10px calc(10px + env(safe-area-inset-bottom,0px))}
+  .date{justify-self:end}
+  .speed{grid-auto-flow:column;align-items:center;justify-content:start;gap:.8em}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+<style>img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+
+<div class="app" id="app">
+  <header class="top gut">
+    <h1>달의 모양 변화</h1>
+    <p class="unit">6학년 과학 · 지구와 달의 운동</p>
+    <button class="ghost" id="fs" type="button">전체 화면</button>
+  </header>
+
+  <main class="stage gut">
+    <section class="panel space" aria-labelledby="h-space">
+      <h2 id="h-space">지구 둘레를 도는 달 <small>우주에서 내려다본 모습</small></h2>
+      <svg id="orbit" class="orbit" viewBox="-110 0 1070 760" role="img" aria-label="왼쪽에서 햇빛이 비치고, 달이 지구 둘레를 시계 반대 방향으로 도는 그림">
+        <defs>
+          <marker id="hSun" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="4.2" markerHeight="4.2" orient="auto"><path class="f-sun" d="M0 0 12 6 0 12Z"/></marker>
+          <marker id="hDir" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="5.5" markerHeight="5.5" orient="auto"><path class="f-dim" d="M0 0 12 6 0 12Z"/></marker>
+          <clipPath id="earthClip"><circle cx="545" cy="380" r="50"/></clipPath>
+        </defs>
+
+        <g class="rays">
+          <line x1="-90" y1="110" x2="136" y2="110" marker-end="url(#hSun)"/>
+          <line x1="-90" y1="245" x2="136" y2="245" marker-end="url(#hSun)"/>
+          <line x1="-90" y1="380" x2="136" y2="380" marker-end="url(#hSun)"/>
+          <line x1="-90" y1="515" x2="136" y2="515" marker-end="url(#hSun)"/>
+          <line x1="-90" y1="650" x2="136" y2="650" marker-end="url(#hSun)"/>
+        </g>
+        <text class="t-sun" x="-94" y="68">햇빛</text>
+
+        <circle class="ring" cx="545" cy="380" r="265"/>
+        <g id="dots"></g>
+        <path class="dir" d="M621.1 216.9A180 180 0 0 0 468.9 216.9" marker-end="url(#hDir)"/>
+        <line id="sight" class="sight" x1="545" y1="380" x2="545" y2="380"/>
+        <text class="t-dim" x="545" y="264" text-anchor="middle">달이 도는 방향</text>
+
+        <g clip-path="url(#earthClip)">
+          <circle class="e-sea" cx="545" cy="380" r="50"/>
+          <ellipse class="e-land" cx="528" cy="362" rx="20" ry="13" transform="rotate(-24 528 362)"/>
+          <ellipse class="e-land" cx="566" cy="398" rx="15" ry="22" transform="rotate(18 566 398)"/>
+          <ellipse class="e-land" cx="520" cy="408" rx="11" ry="8"/>
+          <rect class="e-night" x="545" y="330" width="50" height="100"/>
+        </g>
+        <circle class="e-rim" cx="545" cy="380" r="50"/>
+        <text class="t-label" x="545" y="474" text-anchor="middle">지구</text>
+
+        <g id="moonG">
+          <circle class="m-shade" r="34"/>
+          <path class="m-lit" d="M0-34A34 34 0 0 0 0 34Z"/>
+          <circle class="m-rim" r="34"/>
+          <path id="face" class="face" d="M0-43A43 43 0 0 1 0 43"/>
+        </g>
+        <text id="moonLabel" class="t-label" text-anchor="middle">달</text>
+      </svg>
+      <ul class="legend">
+        <li><i class="sw sw-lit"></i>햇빛을 받아 밝은 쪽</li>
+        <li><i class="sw sw-shade"></i>햇빛을 받지 못해 어두운 쪽</li>
+        <li><i class="sw sw-look"></i>지구에서 보이는 쪽</li>
+        <li class="note">크기와 거리는 실제와 다르게 그렸어요.</li>
+      </ul>
+    </section>
+
+    <section class="panel sky" aria-labelledby="h-sky">
+      <h2 id="h-sky">우리 눈에 보이는 달 <small>지구에서 올려다본 모습</small></h2>
+      <svg id="moonView" class="moonview" viewBox="-275 -275 550 550" role="img" aria-label="음력 1일의 달">
+        <defs>
+          <radialGradient id="gLit" cx="42%" cy="38%" r="70%">
+            <stop offset="0" style="stop-color:var(--moon-hi)"/>
+            <stop offset=".7" style="stop-color:var(--moon)"/>
+            <stop offset="1" style="stop-color:var(--moon-lo)"/>
+          </radialGradient>
+          <radialGradient id="gHalo" cx="50%" cy="50%" r="50%">
+            <stop offset=".88" style="stop-color:var(--accent);stop-opacity:.45"/>
+            <stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/>
+          </radialGradient>
+          <clipPath id="litClip"><path id="litPath" d="M0 0"/></clipPath>
+          <filter id="mareBlur" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="8"/></filter>
+        </defs>
+        <circle id="halo" r="274" fill="url(#gHalo)" opacity="0"/>
+        <circle class="mv-shade" r="245"/>
+        <g clip-path="url(#litClip)">
+          <circle r="245" fill="url(#gLit)"/>
+          <g class="maria" filter="url(#mareBlur)">
+            <ellipse cx="-128" cy="-15" rx="58" ry="105"/>
+            <ellipse cx="-58" cy="-102" rx="66" ry="55"/>
+            <ellipse cx="50" cy="-92" rx="42" ry="40"/>
+            <ellipse cx="92" cy="-32" rx="48" ry="40"/>
+            <ellipse cx="172" cy="-75" rx="22" ry="30"/>
+            <ellipse cx="140" cy="22" rx="28" ry="42"/>
+            <ellipse cx="92" cy="50" rx="21" ry="21"/>
+            <ellipse cx="-42" cy="82" rx="50" ry="38"/>
+            <ellipse cx="-118" cy="86" rx="25" ry="25"/>
+          </g>
+          <circle class="mv-spot" cx="-22" cy="172" r="9"/>
+        </g>
+        <circle class="mv-rim" r="245"/>
+      </svg>
+      <div class="phase" id="phase">
+        <p class="phase-name" id="phaseName">달이 보이지 않아요</p>
+        <p class="phase-sub" id="phaseSub">달의 밝은 쪽이 지구 반대편을 향해요</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="controls">
+    <div class="controls-in gut">
+      <div class="transport">
+        <button class="btn" id="play" type="button" aria-disabled="false"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 0.6 9.3 5 1.5 9.4Z"/></svg>재생</button>
+        <button class="btn" id="pause" type="button" aria-disabled="true"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.2 .8h2.8v8.4H1.2zM6 .8h2.8v8.4H6z"/></svg>멈춤</button>
+      </div>
+      <div class="date" aria-hidden="true"><span class="date-k">음력</span><span class="date-n" id="dayNum">1</span><span class="date-k">일</span></div>
+      <div class="timeline">
+        <div class="marks" id="marks"></div>
+        <input type="range" id="day" min="1" max="30" step="1" value="1" aria-label="음력 날짜">
+        <div class="ticks" id="ticks" aria-hidden="true"></div>
+      </div>
+      <div class="speed" role="radiogroup" aria-labelledby="speedLabel">
+        <span class="speed-label" id="speedLabel">빠르기</span>
+        <div class="seg">
+          <input type="radio" name="speed" id="speedSlow" value="0"><label for="speedSlow">느리게</label>
+          <input type="radio" name="speed" id="speedMid" value="1" checked><label for="speedMid">보통</label>
+          <input type="radio" name="speed" id="speedFast" value="2"><label for="speedFast">빠르게</label>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  document.documentElement.lang = 'ko';
+  const $ = id => document.getElementById(id);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* 교과서의 다섯 가지 달 이름과 볼 수 있는 때 */
+  const PHASES = [
+    { name: '초승달', from: 2,  to: 3,  jump: 3,  icon: 38,  when: '음력 2~3일 무렵',   tip: '오른쪽이 가늘게 밝아요' },
+    { name: '상현달', from: 7,  to: 8,  jump: 8,  icon: 90,  when: '음력 7~8일 무렵',   tip: '오른쪽 반쪽이 밝아요' },
+    { name: '보름달', from: 15, to: 15, jump: 15, icon: 180, when: '음력 15일 무렵',    tip: '둥글게 모두 밝아요' },
+    { name: '하현달', from: 22, to: 23, jump: 23, icon: 270, when: '음력 22~23일 무렵', tip: '왼쪽 반쪽이 밝아요' },
+    { name: '그믐달', from: 27, to: 28, jump: 27, icon: 322, when: '음력 27~28일 무렵', tip: '왼쪽이 가늘게 밝아요' }
+  ];
+  const RATES = [0.55, 1.2, 2.8];           /* 1초에 넘어가는 날 수 */
+  const C = { x: 545, y: 380 }, ORB = 265, RV = 245;
+
+  /* 음력 날짜 → 해·지구·달이 이루는 각.
+     1일에 해와 같은 쪽(0°), 15일에 해의 반대쪽(180°), 다음 달 1일에 다시 0°가 되도록 맞춘 수업용 모형 */
+  const angleOf = pos => pos <= 15 ? (pos - 1) / 14 * 180 : 180 + (pos - 15) / 16 * 180;
+  const dayOf = pos => ((Math.round(pos) - 1) % 30 + 30) % 30 + 1;
+  const pct = d => (d - 1) / 29;
+
+  function describe(day) {
+    const p = PHASES.find(q => day >= q.from && day <= q.to);
+    if (p) return { named: true, title: p.name, sub: p.when + ' · ' + p.tip };
+    if (day === 1) return { title: '달이 보이지 않아요', sub: '달의 밝은 쪽이 지구 반대편을 향해요' };
+    if (day < 7)   return { title: '달이 점점 차올라요', sub: '초승달에서 상현달로 가는 중이에요' };
+    if (day < 15)  return { title: '달이 점점 차올라요', sub: '상현달에서 보름달로 가는 중이에요' };
+    if (day < 22)  return { title: '달이 점점 기울어요', sub: '보름달에서 하현달로 가는 중이에요' };
+    if (day < 27)  return { title: '달이 점점 기울어요', sub: '하현달에서 그믐달로 가는 중이에요' };
+    if (day === 29) return { title: '달이 점점 기울어요', sub: '그믐달이 더 가늘어지고 있어요' };
+    return { title: '달이 거의 보이지 않아요', sub: '곧 음력 1일로 돌아가요' };
+  }
+
+  /* 지구(북반구)에서 본 달의 밝은 부분 */
+  function lit(theta, R) {
+    const t = ((theta % 360) + 360) % 360;
+    const wax = t <= 180;
+    const a = (wax ? t : 360 - t) * Math.PI / 180;
+    const rx = Math.abs(Math.cos(a)) * R;
+    const thin = Math.cos(a) > 0;
+    const limb = wax ? 1 : 0;
+    const term = wax ? (thin ? 0 : 1) : (thin ? 1 : 0);
+    return `M0 ${-R}A${R} ${R} 0 0 ${limb} 0 ${R}A${rx.toFixed(2)} ${R} 0 0 ${term} 0 ${-R}Z`;
+  }
+
+  const app = $('app'), slider = $('day'), dayNum = $('dayNum');
+  const playBtn = $('play'), pauseBtn = $('pause'), fsBtn = $('fs');
+  const moonG = $('moonG'), face = $('face'), sight = $('sight'), moonLabel = $('moonLabel');
+  const litPath = $('litPath'), halo = $('halo'), moonView = $('moonView');
+  const phase = $('phase'), nameEl = $('phaseName'), subEl = $('phaseSub');
+  const SVGNS = 'http://www.w3.org/2000/svg';
+
+  /* 궤도 위 하루 간격 점 */
+  for (let d = 1; d <= 30; d++) {
+    const r = angleOf(d) * Math.PI / 180;
+    const c = document.createElementNS(SVGNS, 'circle');
+    c.setAttribute('class', 'dot');
+    c.setAttribute('cx', (C.x - ORB * Math.cos(r)).toFixed(1));
+    c.setAttribute('cy', (C.y + ORB * Math.sin(r)).toFixed(1));
+    c.setAttribute('r', '3.2');
+    $('dots').appendChild(c);
+  }
+
+  /* 날짜 막대 위의 달 이름표 */
+  PHASES.forEach(p => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mark';
+    b.style.setProperty('--c', pct((p.from + p.to) / 2));
+    b.innerHTML = `<svg viewBox="-12 -12 24 24" aria-hidden="true"><circle class="mi-shade" r="10"/><path class="mi-lit" d="${lit(p.icon, 10)}"/></svg><span>${p.name}</span>`;
+    b.setAttribute('aria-label', `${p.name}, ${p.when}으로 가기`);
+    b.addEventListener('click', () => setDay(p.jump));
+    const bar = document.createElement('i');
+    bar.className = 'span';
+    bar.style.setProperty('--a', pct(p.from));
+    bar.style.setProperty('--b', pct(p.to));
+    $('marks').append(b, bar);
+    p.el = b; p.bar = bar;
+  });
+
+  /* 날짜 눈금 */
+  for (let d = 1; d <= 30; d++) {
+    const t = document.createElement('span');
+    t.className = 'tick';
+    t.style.setProperty('--t', pct(d));
+    if (d === 1 || d % 5 === 0) t.textContent = d;
+    $('ticks').appendChild(t);
+  }
+
+  let pos = 1, target = 1, playing = false, rate = RATES[1];
+  let raf = 0, last = 0, acc = 0, shownDay = 0, shownTitle = '';
+
+  function render() {
+    const th = angleOf(pos), rad = th * Math.PI / 180;
+    const ux = -Math.cos(rad), uy = Math.sin(rad);
+    const mx = C.x + ORB * ux, my = C.y + ORB * uy;
+    moonG.setAttribute('transform', `translate(${mx.toFixed(1)} ${my.toFixed(1)})`);
+    face.setAttribute('transform', `rotate(${(Math.atan2(-uy, -ux) * 180 / Math.PI).toFixed(1)})`);
+    sight.setAttribute('x1', (C.x + ux * 62).toFixed(1));
+    sight.setAttribute('y1', (C.y + uy * 62).toFixed(1));
+    sight.setAttribute('x2', (mx - ux * 52).toFixed(1));
+    sight.setAttribute('y2', (my - uy * 52).toFixed(1));
+    moonLabel.setAttribute('x', (C.x + ux * (ORB + 72)).toFixed(1));
+    moonLabel.setAttribute('y', (C.y + uy * (ORB + 72) + 12).toFixed(1));
+    litPath.setAttribute('d', lit(th, RV));
+    halo.setAttribute('opacity', ((1 - Math.cos(rad)) / 2 * 0.9).toFixed(3));
+
+    const day = dayOf(playing ? pos : target);
+    if (day === shownDay) return;
+    shownDay = day;
+    dayNum.textContent = day;
+    if (playing) syncSlider(day);
+    const info = describe(day);
+    slider.setAttribute('aria-valuetext', `음력 ${day}일, ${info.title}`);
+    moonView.setAttribute('aria-label', `음력 ${day}일의 달, ${info.title}`);
+    phase.classList.toggle('is-named', !!info.named);
+    if (info.title !== shownTitle) {
+      shownTitle = info.title;
+      nameEl.textContent = info.title;
+      if (info.named && !reduce.matches && nameEl.animate) {
+        nameEl.animate(
+          [{ transform: 'scale(.86)', opacity: .15 }, { transform: 'scale(1)', opacity: 1 }],
+          { duration: 380, easing: 'cubic-bezier(.2,.8,.3,1.25)' }
+        );
+      }
+    }
+    subEl.textContent = info.sub;
+    PHASES.forEach(p => {
+      const on = day >= p.from && day <= p.to;
+      p.el.classList.toggle('on', on);
+      p.bar.classList.toggle('on', on);
+    });
+  }
+
+  function frame(ts) {
+    const dt = Math.min(Math.max(ts - last, 0) / 1000, 0.1);
+    last = ts;
+    if (playing) {
+      if (reduce.matches) {
+        acc += dt * rate;
+        if (acc >= 1) { acc = 0; pos = dayOf(pos) % 30 + 1; }
+      } else {
+        pos += dt * rate;
+        if (pos >= 31) pos -= 30;
+      }
+    } else {
+      const gap = target - pos;
+      if (reduce.matches || Math.abs(gap) < 0.004) pos = target;
+      else pos += gap * (1 - Math.exp(-dt * 7));
+      if (pos === target && target >= 31) { pos -= 30; target -= 30; }
+    }
+    render();
+    raf = (playing || pos !== target) ? requestAnimationFrame(frame) : 0;
+  }
+  function wake() {
+    if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
+  }
+
+  function syncSlider(day) {
+    slider.value = day;
+    slider.style.setProperty('--p', pct(day));
+  }
+  function syncButtons() {
+    playBtn.setAttribute('aria-disabled', String(playing));
+    pauseBtn.setAttribute('aria-disabled', String(!playing));
+  }
+  function unwrap() {
+    if (target >= 31) { target -= 30; pos -= 30; }
+  }
+  function play() {
+    if (playing) return;
+    playing = true; acc = 0;
+    syncButtons(); wake();
+  }
+  function pause() {
+    if (!playing) return;
+    playing = false;
+    target = Math.round(pos);
+    syncSlider(dayOf(target));
+    syncButtons(); wake();
+  }
+  function setDay(day) {
+    pause(); unwrap();
+    target = day;
+    syncSlider(day);
+    shownDay = 0; wake();
+  }
+  function step(delta) {
+    pause(); unwrap();
+    if (delta > 0) target = target === 30 ? 31 : target + 1;
+    else if (target === 1) { pos += 30; target = 30; }
+    else target -= 1;
+    syncSlider(dayOf(target));
+    shownDay = 0; wake();
+  }
+
+  slider.addEventListener('input', () => setDay(Number(slider.value)));
+  playBtn.addEventListener('click', () => {
+    if (playing) return;
+    play();
+    if (document.activeElement === playBtn) pauseBtn.focus({ preventScroll: true });
+  });
+  pauseBtn.addEventListener('click', () => {
+    if (!playing) return;
+    pause();
+    if (document.activeElement === pauseBtn) playBtn.focus({ preventScroll: true });
+  });
+  document.querySelectorAll('input[name="speed"]').forEach(r => {
+    r.addEventListener('change', () => { if (r.checked) rate = RATES[Number(r.value)]; });
+    if (r.checked) rate = RATES[Number(r.value)];
+  });
+
+  /* 글쇠: 사이띄개 = 재생·멈춤, 좌우 화살표 = 하루씩 */
+  document.addEventListener('keydown', e => {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const el = e.target, tag = el && el.tagName;
+    if (e.key === ' ' || e.code === 'Space') {
+      if (tag === 'BUTTON' || (tag === 'INPUT' && el.type === 'radio')) return;
+      e.preventDefault();
+      playing ? pause() : play();
+    } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && tag !== 'INPUT') {
+      e.preventDefault();
+      step(e.key === 'ArrowRight' ? 1 : -1);
+    }
+  });
+
+  /* 전체 화면 */
+  const root = document.documentElement;
+  if (!document.fullscreenEnabled || !root.requestFullscreen) fsBtn.hidden = true;
+  fsBtn.addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await root.requestFullscreen();
+    } catch (err) { fsBtn.hidden = true; }
+  });
+  document.addEventListener('fullscreenchange', () => {
+    fsBtn.textContent = document.fullscreenElement ? '전체 화면 끝내기' : '전체 화면';
+  });
+
+  /* 밤하늘의 별 */
+  const cv = $('stars');
+  function drawStars() {
+    const w = window.innerWidth, h = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    let s = 20261121;
+    const rnd = () => {
+      s = (s + 0x6D2B79F5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const k = Math.max(1, Math.min(w, h * 1.7778) / 1300);
+    const n = Math.round(w * h / 4300);
+    for (let i = 0; i < n; i++) {
+      const x = rnd() * w, y = rnd() * h, big = rnd() > 0.9;
+      const r = (big ? 1.1 + rnd() * 0.9 : 0.35 + rnd() * 0.65) * k;
+      const a = big ? 0.75 + rnd() * 0.25 : 0.25 + rnd() * 0.5;
+      const warm = rnd() > 0.8;
+      ctx.fillStyle = warm ? `rgba(255,236,200,${a})` : `rgba(214,226,255,${a})`;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  let starTimer = 0;
+  window.addEventListener('resize', () => {
+    cancelAnimationFrame(starTimer);
+    starTimer = requestAnimationFrame(drawStars);
+  });
+
+  syncButtons(); syncSlider(1); render(); drawStars();
+})();
+</script>
+</body>
+</html>

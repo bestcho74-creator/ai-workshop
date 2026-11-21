@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>물의 순환 애니메이션</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 배치: 화면 한 장이 그림책 펼침면. 위는 가득 찬 풍경(캔버스), 아래는 물결 테두리 종이 띠에 설명 한 줄과 단추.
+   밝은 그림책 한 가지 모습으로만 보여 주기로 정했으므로 어두운 테마는 따로 두지 않는다. */
+:root {
+  --ink: #1f3a5f;
+  --ink-soft: #4f6a8a;
+  --paper: #f4faff;
+  --card: #ffffff;
+  --shade: rgba(31, 58, 95, .22);
+  --sky: #bfe6fb;
+  --sun: #ffd24a;
+  --track-a: #cfeafb;
+  --track-b: #5db9ec;
+  --evap: #d9601a;
+  --cond: #6d5bd0;
+  --precip: #1b78c4;
+  --flow: #0e8f72;
+  --font-display: "Jua", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  --font-util: "Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  color-scheme: light;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { height: 100%; }
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  -webkit-text-size-adjust: 100%;
+}
+[hidden] { display: none !important; }
+
+.book {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 30rem;
+}
+
+/* ── 풍경 ── */
+.scene {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 14rem;
+  overflow: hidden;
+  background: var(--sky);
+}
+.scene canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.title {
+  position: absolute;
+  z-index: 2;
+  top: clamp(.6rem, 2.2vh, 1.6rem);
+  right: max(16px, env(safe-area-inset-right, 0px));
+  margin: 0;
+  padding: .12em .55em .18em;
+  font-weight: 400;
+  font-size: clamp(1.35rem, 3vw, 3.6rem);
+  line-height: 1.15;
+  color: var(--ink);
+  background: var(--card);
+  border-radius: .45em;
+  box-shadow: 0 .1em 0 var(--shade);
+  transform: rotate(2.5deg);
+}
+
+/* ── 단추 공통 ── */
+.pill {
+  --c: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .38em;
+  padding: .22em .8em .26em;
+  font: inherit;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--card);
+  border: .12em solid var(--c);
+  border-radius: 999px;
+  box-shadow: 0 .16em 0 var(--shade);
+  cursor: pointer;
+  transition: transform .2s ease, opacity .2s ease, background-color .2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.pill.has-num { padding-left: .3em; }
+.pill:hover { transform: translateY(-.06em); }
+.pill:active { transform: translateY(.1em); box-shadow: 0 .05em 0 var(--shade); }
+.pill:focus-visible { outline: .14em solid var(--ink); outline-offset: .14em; }
+.pill[aria-pressed="true"] { background: var(--c); color: var(--card); }
+.num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.45em;
+  height: 1.45em;
+  border-radius: 50%;
+  font-size: .86em;
+  line-height: 1;
+  background: var(--c);
+  color: var(--card);
+}
+.pill[aria-pressed="true"] .num { background: var(--card); color: var(--c); }
+[data-stage="evap"] { --c: var(--evap); }
+[data-stage="cond"] { --c: var(--cond); }
+[data-stage="precip"] { --c: var(--precip); }
+[data-stage="flow"] { --c: var(--flow); }
+
+/* 풍경 위 이름표 */
+.tag {
+  position: absolute;
+  z-index: 2;
+  left: var(--x);
+  top: var(--y);
+  font-size: clamp(.95rem, 1.85vw, 2.25rem);
+  transform-origin: left center;
+}
+.scene.has-focus .tag[aria-pressed="false"] { opacity: .55; }
+.tag[aria-pressed="true"],
+.tag[aria-pressed="true"]:hover { transform: scale(1.14); }
+
+/* ── 아래 종이 띠 ── */
+.panel {
+  position: relative;
+  z-index: 3;
+  background: var(--paper);
+}
+.panel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: .7rem;
+  background: radial-gradient(circle at 50% 100%, var(--paper) 0, var(--paper) .66rem, transparent .7rem) 0 0 / 1.4rem .7rem repeat-x;
+}
+.panel-in {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(.5rem, 1.3vh, 1rem);
+  padding-block: clamp(.5rem, 1.4vh, 1.1rem) clamp(.7rem, 1.8vh, 1.3rem);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.caption {
+  display: flex;
+  align-items: center;
+  gap: .55em;
+  margin: 0;
+  font-size: clamp(1.1rem, 2vw, 2.5rem);
+  line-height: 1.3;
+  word-break: keep-all;
+}
+.chip {
+  --c: var(--ink);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .3em;
+  padding: .14em .6em .18em;
+  border-radius: .45em;
+  font-size: .82em;
+  white-space: nowrap;
+  background: var(--c);
+  color: var(--card);
+}
+.chip.has-num { padding-left: .28em; }
+.chip .num { background: var(--card); color: var(--c); }
+.line { min-width: 0; text-wrap: balance; }
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem 1.5rem;
+  font-size: clamp(1rem, 1.4vw, 1.75rem);
+}
+.stages, .tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .45em;
+}
+.tools { gap: .6em; }
+.controls .pill { min-height: 2.75rem; }
+.pause { min-width: 6.7em; }
+.pause[data-paused="true"] { background: var(--sun); }
+.full { min-width: 6.2em; }
+.ico { display: inline-grid; }
+.ico svg { display: block; width: .95em; height: .95em; }
+
+.speed {
+  display: inline-flex;
+  align-items: center;
+  gap: .45em;
+}
+.speed .ends {
+  font-family: var(--font-util);
+  font-size: .72em;
+  color: var(--ink-soft);
+}
+.speed output {
+  min-width: 2.9em;
+  text-align: right;
+  font-size: .92em;
+  font-variant-numeric: tabular-nums;
+}
+.speed input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: clamp(6.5rem, 12.5vw, 16rem);
+  height: 2.75rem;
+  margin: 0;
+  font: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.speed input::-webkit-slider-runnable-track {
+  box-sizing: border-box;
+  height: .7em;
+  border: .12em solid var(--ink);
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--track-a), var(--track-b));
+}
+.speed input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  width: 1.5em;
+  height: 1.5em;
+  margin-top: -.52em;
+  border: .12em solid var(--ink);
+  border-radius: 50%;
+  background: var(--sun);
+  box-shadow: 0 .1em 0 var(--shade);
+}
+.speed input::-moz-range-track {
+  box-sizing: border-box;
+  height: .7em;
+  border: .12em solid var(--ink);
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--track-a), var(--track-b));
+}
+.speed input::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 1.5em;
+  height: 1.5em;
+  border: .12em solid var(--ink);
+  border-radius: 50%;
+  background: var(--sun);
+  box-shadow: 0 .1em 0 var(--shade);
+}
+.speed input:focus-visible { outline: .14em solid var(--ink); outline-offset: .1em; border-radius: 999px; }
+
+@media (max-width: 40rem) {
+  .caption { flex-direction: column; align-items: flex-start; gap: .35em; }
+  .line { min-height: 2.6em; }
+  .speed .ends { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pill { transition: none; }
+}
+</style>
+
+<div class="book" lang="ko">
+  <main class="scene" id="scene">
+    <canvas id="view" role="img" aria-label="바다에서 올라간 수증기가 구름이 되고, 비와 눈으로 내려 강을 따라 다시 바다로 돌아가는 풍경 그림"></canvas>
+    <h1 class="title">물의 순환</h1>
+    <button type="button" class="pill has-num tag" data-stage="evap" aria-pressed="false" tabindex="-1" style="--x:4%;--y:49%"><span class="num">1</span>증발</button>
+    <button type="button" class="pill has-num tag" data-stage="cond" aria-pressed="false" tabindex="-1" style="--x:25%;--y:3.5%"><span class="num">2</span>응결</button>
+    <button type="button" class="pill has-num tag" data-stage="precip" aria-pressed="false" tabindex="-1" style="--x:49%;--y:41%"><span class="num">3</span>비와 눈</button>
+    <button type="button" class="pill has-num tag" data-stage="flow" aria-pressed="false" tabindex="-1" style="--x:46%;--y:84%"><span class="num">4</span>흘러감</button>
+  </main>
+
+  <section class="panel" aria-label="설명과 조절">
+    <div class="panel-in">
+      <p class="caption" id="caption" aria-live="polite">
+        <span class="chip" id="chip"><span class="num" id="chip-num" hidden></span><span id="chip-name">물의 순환</span></span>
+        <span class="line" id="line">물은 바다에서 하늘로, 하늘에서 땅으로, 다시 바다로 쉬지 않고 돌고 돌아요.</span>
+      </p>
+      <div class="controls">
+        <div class="stages" role="group" aria-label="단계 고르기">
+          <button type="button" class="pill" id="s-all" data-stage="" aria-pressed="true">전체 보기</button>
+          <button type="button" class="pill has-num" id="s-evap" data-stage="evap" aria-pressed="false"><span class="num">1</span>증발</button>
+          <button type="button" class="pill has-num" id="s-cond" data-stage="cond" aria-pressed="false"><span class="num">2</span>응결</button>
+          <button type="button" class="pill has-num" id="s-precip" data-stage="precip" aria-pressed="false"><span class="num">3</span>비와 눈</button>
+          <button type="button" class="pill has-num" id="s-flow" data-stage="flow" aria-pressed="false"><span class="num">4</span>흘러감</button>
+        </div>
+        <div class="tools">
+          <div class="speed">
+            <label for="speed">빠르기</label>
+            <span class="ends" aria-hidden="true">느리게</span>
+            <input type="range" id="speed" min="-10" max="10" step="1" value="0">
+            <span class="ends" aria-hidden="true">빠르게</span>
+            <output id="speed-out" for="speed">1.0배</output>
+          </div>
+          <button type="button" class="pill pause" id="pause" data-paused="false">
+            <span class="ico" id="ico-pause"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="2" width="5" height="16" rx="1.5" fill="currentColor"/><rect x="12" y="2" width="5" height="16" rx="1.5" fill="currentColor"/></svg></span>
+            <span class="ico" id="ico-play" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2.6v14.8a1 1 0 0 0 1.53.85l11.8-7.4a1 1 0 0 0 0-1.7L6.53 1.75A1 1 0 0 0 5 2.6z" fill="currentColor"/></svg></span>
+            <span id="pause-label">멈춤</span>
+          </button>
+          <button type="button" class="pill full" id="full"><span id="full-label">전체 화면</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* 글꼴은 그림을 막지 않도록 나중에 불러온다. 인터넷이 없으면 컴퓨터에 있는 한글 글꼴로 보인다. */
+  const fontLink = document.createElement('link');
+  fontLink.rel = 'stylesheet';
+  fontLink.href = 'https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap';
+  document.head.appendChild(fontLink);
+
+  const TAU = Math.PI * 2;
+  const $ = id => document.getElementById(id);
+  const scene = $('scene'), canvas = $('view'), ctx = canvas.getContext('2d');
+  const back = document.createElement('canvas'), front = document.createElement('canvas');
+  let W = 1, H = 1, U = 1, DPR = 1;
+
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const mix = (p, q, t) => 'rgb(' + Math.round(lerp(p[0], q[0], t)) + ',' + Math.round(lerp(p[1], q[1], t)) + ',' + Math.round(lerp(p[2], q[2], t)) + ')';
+  function seeded(a) {
+    return () => {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ── 그림 물감 ── */
+  const C = {
+    skyTop: '#7fcaf5', skyMid: '#c9ecfd', skyLow: '#eaf8ff',
+    sun: '#ffd24a', sunCore: '#ffe27e', sunRay: '#ffc533', face: '#93560f', cheek: 'rgba(255,120,90,.42)',
+    high: '#8fa3e3', highShade: 'rgba(58,72,150,.16)', snow: '#ffffff',
+    low: '#79bcae', lowShade: 'rgba(30,90,95,.13)',
+    hill: '#67c06c', land: '#a6dd7b', landDeep: '#94d26e', sand: '#f8e3a6',
+    seaTop: '#58bfee', seaDeep: '#1f86cd', seaBand: 'rgba(20,105,185,.22)', foam: 'rgba(255,255,255,.6)',
+    riverA: '#a9e3fa', riverB: '#62c4f1', riverC: '#3ba5e0', bank: 'rgba(38,120,82,.28)',
+    trunk: '#9b6a43', leaf: '#3f9f58', leafLight: '#5cbb6e', pine: '#2f8f5f', grass: '#5fb45f',
+    wall: '#fff4dc', roof: '#e9634e', door: '#b5714a', glass: '#8fd0f2',
+    hull: '#e9634e', sail: '#ffffff', mast: '#7a5235',
+    rain: '#2a86d6', snowEdge: 'rgba(70,130,200,.75)', splash: 'rgba(255,255,255,.9)',
+    cloud: [255, 255, 255], cloudDark: [197, 210, 230], cloudUnder: [211, 232, 247], cloudUnderDark: [147, 168, 198],
+    vapor: [255, 255, 255], drop: [214, 238, 255], vaporEdge: [120, 180, 225], dropEdge: [38, 122, 200],
+    paperShadow: 'rgba(28,52,96,.26)', veil: '22,44,86'
+  };
+  const css = getComputedStyle(document.documentElement);
+  const tone = name => (css.getPropertyValue(name) || '').trim() || '#1f3a5f';
+
+  const STAGES = {
+    evap: { num: 1, name: '증발', color: tone('--evap'), text: '햇볕에 데워진 바닷물이 눈에 보이지 않는 수증기가 되어 하늘로 올라가요.' },
+    cond: { num: 2, name: '응결', color: tone('--cond'), text: '하늘 높이 올라간 수증기는 차가워져 작은 물방울이 되고, 모여서 구름이 돼요.' },
+    precip: { num: 3, name: '비와 눈', color: tone('--precip'), text: '구름 속 물방울이 커져 무거워지면 비로 내리고, 추운 곳에서는 눈으로 내려요.' },
+    flow: { num: 4, name: '흘러감', color: tone('--flow'), text: '땅에 내린 비와 녹은 눈은 강을 따라 흘러 다시 바다로 돌아가요.' }
+  };
+  const ORDER = ['evap', 'cond', 'precip', 'flow'];
+  const OVERVIEW = '물은 바다에서 하늘로, 하늘에서 땅으로, 다시 바다로 쉬지 않고 돌고 돌아요.';
+
+  /* ── 땅 모양 (가로·세로를 0~1로 본 값) ── */
+  const SEA = 0.70;
+  const hillY = x => 0.705 - 0.085 * smooth(0.38, 0.56, x) - 0.02 * Math.sin((x - 0.38) * 14);
+  const frontY = x => 0.725 + 0.018 * Math.sin(x * 9 + 0.6);
+  const peakY = x => (x < 0.84
+    ? 0.74 - 0.44 * Math.pow(clamp((x - 0.58) / 0.26, 0, 1), 1.3)
+    : 0.30 + 0.42 * Math.pow(clamp((x - 0.84) / 0.26, 0, 1), 0.85));
+  const COAST = [[0.709, 0.41], [0.755, 0.355], [0.80, 0.33], [0.855, 0.3025], [0.91, 0.29], [1.03, 0.31]];
+  function coastX(y) {
+    if (y <= COAST[0][0]) return COAST[0][1];
+    for (let i = 1; i < COAST.length; i++) {
+      if (y <= COAST[i][0]) {
+        const a = COAST[i - 1], b = COAST[i];
+        return lerp(a[1], b[1], (y - a[0]) / (b[0] - a[0]));
+      }
+    }
+    return COAST[COAST.length - 1][1];
+  }
+
+  /* 강: 눈 덮인 산에서 바다까지 */
+  const RIVER = [[0.805, 0.425], [0.775, 0.50], [0.795, 0.565], [0.735, 0.625], [0.665, 0.668], [0.60, 0.715],
+    [0.555, 0.765], [0.47, 0.80], [0.395, 0.855], [0.32, 0.872], [0.255, 0.89]];
+  let riv = [];
+  function buildRiver() {
+    const pts = [];
+    const P = i => RIVER[clamp(i, 0, RIVER.length - 1)];
+    for (let i = 0; i < RIVER.length - 1; i++) {
+      const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+      for (let k = 0; k < 20; k++) {
+        const t = k / 20, t2 = t * t, t3 = t2 * t;
+        const f = (a, b, c, d) => 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (3 * b - a - 3 * c + d) * t3);
+        pts.push([f(p0[0], p1[0], p2[0], p3[0]) * W, f(p0[1], p1[1], p2[1], p3[1]) * H]);
+      }
+    }
+    const end = RIVER[RIVER.length - 1];
+    pts.push([end[0] * W, end[1] * H]);
+    const len = [0];
+    for (let i = 1; i < pts.length; i++) len.push(len[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const total = len[len.length - 1], N = 140;
+    riv = [];
+    let j = 1;
+    for (let i = 0; i <= N; i++) {
+      const d = total * i / N;
+      while (j < len.length - 1 && len[j] < d) j++;
+      const t = (d - len[j - 1]) / ((len[j] - len[j - 1]) || 1);
+      riv.push({ x: lerp(pts[j - 1][0], pts[j][0], t), y: lerp(pts[j - 1][1], pts[j][1], t), ang: 0, w: 0 });
+    }
+    for (let i = 0; i <= N; i++) {
+      const a = riv[Math.max(0, i - 1)], b = riv[Math.min(N, i + 1)];
+      riv[i].ang = Math.atan2(b.y - a.y, b.x - a.x);
+      riv[i].w = U * lerp(0.3, 1.8, Math.pow(i / N, 1.3));
+    }
+  }
+  function riverAt(f) {
+    const N = riv.length - 1, v = clamp(f, 0, 1) * N, i = Math.min(N - 1, Math.floor(v)), t = v - i;
+    const a = riv[i], b = riv[i + 1];
+    return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), ang: a.ang, w: lerp(a.w, b.w, t) };
+  }
+  function riverPath(g, grow) {
+    g.beginPath();
+    for (let i = 0; i < riv.length; i++) {
+      const p = riv[i], w = p.w + grow;
+      const x = p.x + Math.cos(p.ang - Math.PI / 2) * w, y = p.y + Math.sin(p.ang - Math.PI / 2) * w;
+      if (i) g.lineTo(x, y); else g.moveTo(x, y);
+    }
+    for (let i = riv.length - 1; i >= 0; i--) {
+      const p = riv[i], w = p.w + grow;
+      g.lineTo(p.x + Math.cos(p.ang + Math.PI / 2) * w, p.y + Math.sin(p.ang + Math.PI / 2) * w);
+    }
+    g.closePath();
+  }
+
+  /* ── 움직이지 않는 그림: 한 번만 그려 둔다 ── */
+  const paper = g => { g.shadowColor = C.paperShadow; g.shadowBlur = 1.3 * U * DPR; g.shadowOffsetX = 0; g.shadowOffsetY = -0.18 * U * DPR; };
+  const flat = g => { g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetX = 0; g.shadowOffsetY = 0; };
+
+  function highMountain(g) {
+    g.beginPath();
+    g.moveTo(0.56 * W, 0.78 * H);
+    g.quadraticCurveTo(0.735 * W, 0.60 * H, 0.815 * W, 0.335 * H);
+    g.quadraticCurveTo(0.84 * W, 0.275 * H, 0.868 * W, 0.335 * H);
+    g.quadraticCurveTo(0.95 * W, 0.56 * H, 1.1 * W, 0.72 * H);
+    g.lineTo(1.1 * W, 0.78 * H);
+    g.closePath();
+  }
+  function lowMountain(g) {
+    g.beginPath();
+    g.moveTo(0.49 * W, 0.78 * H);
+    g.quadraticCurveTo(0.60 * W, 0.62 * H, 0.632 * W, 0.49 * H);
+    g.quadraticCurveTo(0.652 * W, 0.44 * H, 0.674 * W, 0.49 * H);
+    g.quadraticCurveTo(0.705 * W, 0.61 * H, 0.775 * W, 0.78 * H);
+    g.closePath();
+  }
+  function coastCurve(g) {
+    g.moveTo(0.41 * W, frontY(0.41) * H);
+    g.bezierCurveTo(0.36 * W, 0.74 * H, 0.34 * W, 0.77 * H, 0.33 * W, 0.80 * H);
+    g.bezierCurveTo(0.315 * W, 0.84 * H, 0.285 * W, 0.87 * H, 0.29 * W, 0.91 * H);
+    g.quadraticCurveTo(0.295 * W, 0.97 * H, 0.31 * W, 1.03 * H);
+  }
+  function landPath(g) {
+    g.beginPath();
+    coastCurve(g);
+    g.lineTo(1.03 * W, 1.03 * H);
+    for (let x = 1.03; x >= 0.41; x -= 0.01) g.lineTo(x * W, frontY(x) * H);
+    g.closePath();
+  }
+  function tree(g, x, y, s) {
+    g.fillStyle = C.trunk; g.fillRect(x - s * 0.09, y - s * 0.75, s * 0.18, s * 0.78);
+    g.fillStyle = C.leaf; g.beginPath(); g.arc(x, y - s * 1.05, s * 0.52, 0, TAU); g.fill();
+    g.fillStyle = C.leafLight; g.beginPath(); g.arc(x - s * 0.14, y - s * 1.17, s * 0.3, 0, TAU); g.fill();
+  }
+  function pine(g, x, y, s) {
+    g.fillStyle = C.trunk; g.fillRect(x - s * 0.07, y - s * 0.3, s * 0.14, s * 0.32);
+    g.fillStyle = C.pine;
+    for (let i = 0; i < 3; i++) {
+      const w = s * (0.5 - i * 0.1), b = y - s * (0.25 + i * 0.36);
+      g.beginPath(); g.moveTo(x - w, b); g.lineTo(x, b - s * 0.62); g.lineTo(x + w, b); g.closePath(); g.fill();
+    }
+  }
+  function house(g, x, y, s) {
+    g.fillStyle = C.wall; g.fillRect(x - s * 0.5, y - s * 0.62, s, s * 0.62);
+    g.fillStyle = C.roof; g.beginPath(); g.moveTo(x - s * 0.64, y - s * 0.6); g.lineTo(x, y - s * 1.12); g.lineTo(x + s * 0.64, y - s * 0.6); g.closePath(); g.fill();
+    g.fillStyle = C.door; g.fillRect(x - s * 0.3, y - s * 0.34, s * 0.2, s * 0.34);
+    g.fillStyle = C.glass; g.fillRect(x + s * 0.1, y - s * 0.44, s * 0.22, s * 0.2);
+  }
+
+  function paintBack() {
+    const g = back.getContext('2d');
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    flat(g);
+    const sky = g.createLinearGradient(0, 0, 0, H * 0.74);
+    sky.addColorStop(0, C.skyTop); sky.addColorStop(0.62, C.skyMid); sky.addColorStop(1, C.skyLow);
+    g.fillStyle = sky; g.fillRect(0, 0, W, H);
+
+    /* 눈 덮인 높은 산 */
+    paper(g); highMountain(g); g.fillStyle = C.high; g.fill(); flat(g);
+    g.save(); highMountain(g); g.clip();
+    g.beginPath(); g.moveTo(0.64 * W, -10);
+    for (let x = 0.64; x <= 1.04; x += 0.004) g.lineTo(x * W, (0.418 + 0.013 * Math.sin(x * 70) + 0.009 * Math.sin(x * 23 + 1)) * H);
+    g.lineTo(1.04 * W, -10); g.closePath();
+    g.fillStyle = C.snow; g.fill();
+    g.beginPath(); g.moveTo(0.842 * W, 0.26 * H); g.lineTo(0.878 * W, 0.44 * H); g.lineTo(0.852 * W, 0.58 * H); g.lineTo(0.91 * W, 0.8 * H);
+    g.lineTo(1.1 * W, 0.8 * H); g.lineTo(1.1 * W, 0.2 * H); g.closePath();
+    g.fillStyle = C.highShade; g.fill();
+    g.restore();
+
+    /* 낮은 산 */
+    paper(g); lowMountain(g); g.fillStyle = C.low; g.fill(); flat(g);
+    g.save(); lowMountain(g); g.clip();
+    g.beginPath(); g.moveTo(0.653 * W, 0.42 * H); g.lineTo(0.668 * W, 0.56 * H); g.lineTo(0.655 * W, 0.66 * H); g.lineTo(0.69 * W, 0.8 * H);
+    g.lineTo(0.8 * W, 0.8 * H); g.lineTo(0.8 * W, 0.4 * H); g.closePath();
+    g.fillStyle = C.lowShade; g.fill();
+    g.restore();
+
+    /* 언덕 */
+    paper(g);
+    g.beginPath(); g.moveTo(0.36 * W, 0.82 * H);
+    for (let x = 0.36; x <= 1.03; x += 0.005) g.lineTo(x * W, hillY(x) * H);
+    g.lineTo(1.03 * W, 0.82 * H); g.closePath();
+    g.fillStyle = C.hill; g.fill(); flat(g);
+    for (const x of [0.452, 0.476, 0.503]) pine(g, x * W, (hillY(x) + 0.006) * H, 2.5 * U);
+    for (const x of [0.895, 0.955]) pine(g, x * W, (hillY(x) + 0.006) * H, 2.7 * U);
+    tree(g, 0.925 * W, (hillY(0.925) + 0.008) * H, 2.4 * U);
+  }
+
+  function paintFront() {
+    const g = front.getContext('2d');
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g.clearRect(0, 0, W, H);
+    flat(g);
+
+    /* 모래밭과 풀밭 */
+    g.beginPath(); coastCurve(g);
+    g.strokeStyle = C.sand; g.lineWidth = 2.6 * U; g.lineCap = 'round'; g.stroke();
+    paper(g); landPath(g); g.fillStyle = C.land; g.fill(); flat(g);
+    g.save(); landPath(g); g.clip();
+    g.beginPath(); g.moveTo(0.2 * W, 1.03 * H);
+    for (let x = 0.2; x <= 1.03; x += 0.01) g.lineTo(x * W, (0.935 + 0.016 * Math.sin(x * 11)) * H);
+    g.lineTo(1.03 * W, 1.03 * H); g.closePath();
+    g.fillStyle = C.landDeep; g.fill();
+
+    /* 풀과 꽃 */
+    const rnd = seeded(7);
+    const petals = ['#ffffff', '#ffd24a', '#ff9db0'];
+    let placed = 0;
+    for (let i = 0; i < 500 && placed < 46; i++) {
+      const x = lerp(0.3, 1, rnd()), y = lerp(0.74, 0.99, rnd()), kind = rnd();
+      if (x < coastX(y) + 0.035 || y < frontY(x) + 0.03) continue;
+      const px = x * W, py = y * H;
+      let near = false;
+      for (let j = 0; j < riv.length; j += 4) {
+        if (Math.hypot(riv[j].x - px, riv[j].y - py) < riv[j].w + 1.6 * U) { near = true; break; }
+      }
+      if (near) continue;
+      placed++;
+      if (kind < 0.45) {
+        g.strokeStyle = C.grass; g.lineWidth = 0.16 * U; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(px - 0.35 * U, py - 0.6 * U); g.lineTo(px, py); g.lineTo(px + 0.35 * U, py - 0.6 * U); g.stroke();
+      } else {
+        const col = petals[Math.floor(kind * 97) % 3];
+        g.fillStyle = col; g.beginPath(); g.arc(px, py, 0.32 * U, 0, TAU); g.fill();
+        g.fillStyle = col === '#ffd24a' ? '#ffffff' : '#ffd24a'; g.beginPath(); g.arc(px, py, 0.13 * U, 0, TAU); g.fill();
+      }
+    }
+
+    /* 강둑 그늘은 땅 위에만 */
+    riverPath(g, 0.35 * U); g.fillStyle = C.bank; g.fill();
+    g.restore();
+
+    /* 강물 */
+    const a = riv[0], b = riv[riv.length - 1];
+    const water = g.createLinearGradient(a.x, a.y, b.x, b.y);
+    /* 강 끝은 바다 빛에 스며들듯 옅어진다 */
+    water.addColorStop(0, C.riverA); water.addColorStop(0.55, C.riverB); water.addColorStop(0.92, C.riverC); water.addColorStop(1, 'rgba(59,165,224,0)');
+    riverPath(g, 0); g.fillStyle = water; g.fill();
+
+    tree(g, 0.662 * W, 0.835 * H, 3.3 * U);
+    tree(g, 0.702 * W, 0.818 * H, 2.7 * U);
+    house(g, 0.815 * W, 0.865 * H, 4.4 * U);
+    tree(g, 0.93 * W, 0.9 * H, 3.8 * U);
+    pine(g, 0.885 * W, 0.845 * H, 3.2 * U);
+  }
+
+  /* ── 움직이는 것들 ── */
+  const CYCLE = 34; /* 구름 하나가 바다에서 산까지 가는 시간(초) */
+  const clouds = [0, 0.25, 0.5, 0.75].map(off => ({ off, puff: 0, acc: 0, p: 0, x: 0, y: 0, s: 1, a: 0, dark: 0, k: 0 }));
+  let vapor = [], rain = [], snow = [], splash = [], settled = [];
+  let vaporAcc = 0, simT = 0;
+  let focus = null, focusAmt = 0, spot = null;
+  const boost = key => (focus === key ? 1 : 0);
+
+  function cloudState(c, t) {
+    const p = ((t / CYCLE + c.off) % 1 + 1) % 1;
+    c.p = p;
+    c.x = 0.16 + 0.74 * p;
+    c.y = 0.22 - 0.025 * Math.sin(p * Math.PI) + 0.006 * Math.sin(t * 0.5 + c.off * 20);
+    c.s = (p < 0.30 ? lerp(0.30, 1, smooth(0, 0.30, p)) : lerp(1, 0.55, smooth(0.72, 1, p))) * (1 + c.puff);
+    c.a = Math.min(smooth(0, 0.035, p), 1 - smooth(0.94, 1, p));
+    c.dark = Math.min(smooth(0.28, 0.46, p), 1 - 0.75 * smooth(0.74, 0.95, p));
+    c.k = Math.min(smooth(0.45, 0.52, p), 1 - smooth(0.90, 0.96, p));
+  }
+
+  function update(dt) {
+    const t = simT;
+    for (const c of clouds) { c.puff -= c.puff * Math.min(1, 3 * dt); cloudState(c, t); }
+    if (dt <= 0) return;
+
+    /* 증발: 바다에서 수증기가 올라간다 */
+    vaporAcc += dt * (9 + 8 * boost('evap'));
+    while (vaporAcc >= 1) {
+      vaporAcc--;
+      vapor.push({ x: rand(0.02, 0.37), y: SEA + rand(0, 0.03), vy: rand(0.04, 0.06), ph: rand(0, TAU), age: 0 });
+    }
+    for (let i = vapor.length - 1; i >= 0; i--) {
+      const v = vapor[i];
+      v.age += dt;
+      if (v.y > 0.43) {
+        v.y -= v.vy * dt;
+        v.x += Math.sin(v.ph + t * 1.5) * 0.008 * dt;
+        continue;
+      }
+      /* 응결: 가까운 어린 구름으로 모인다 */
+      let best = null, bd = 9;
+      for (const c of clouds) {
+        if (c.p > 0.01 && c.p < 0.38) {
+          const d = Math.abs(c.x - v.x);
+          if (d < bd) { bd = d; best = c; }
+        }
+      }
+      if (!best) {
+        v.y -= v.vy * dt;
+        if (v.y < 0.1) vapor.splice(i, 1);
+        continue;
+      }
+      const dx = best.x - v.x, dy = best.y - v.y, d = Math.hypot(dx, dy) || 1e-6, sp = 0.075 * dt;
+      if (d < 0.02 + sp) {
+        best.puff = Math.min(0.12, best.puff + 0.025);
+        vapor.splice(i, 1);
+        continue;
+      }
+      v.x += dx / d * sp;
+      v.y += dy / d * sp;
+    }
+
+    /* 비와 눈 */
+    for (const c of clouds) {
+      if (c.k <= 0.01) continue;
+      c.acc += dt * c.k * 26 * (1 + 0.5 * boost('precip'));
+      while (c.acc >= 1) {
+        c.acc--;
+        const x = c.x + rand(-1, 1) * (5.2 * U * c.s) / W;
+        const y = c.y + (1.9 * U * c.s) / H;
+        if (x > 0.725 + rand(-0.02, 0.02)) {
+          if (Math.random() < 0.32) {
+            snow.push({ x, y, vy: rand(0.075, 0.12), ph: rand(0, TAU), r: rand(0.34, 0.6),
+              land: Math.min(peakY(x) + rand(0.015, 0.11), hillY(x) - 0.012) });
+          }
+        } else {
+          rain.push({ x, y, vy: rand(0.45, 0.6), land: hillY(x) + rand(0.004, 0.085) });
+        }
+      }
+    }
+    for (let i = rain.length - 1; i >= 0; i--) {
+      const r = rain[i];
+      r.y += r.vy * dt; r.x += 0.03 * dt;
+      if (r.y >= r.land) { splash.push({ x: r.x, y: r.land, age: 0 }); rain.splice(i, 1); }
+    }
+    for (let i = snow.length - 1; i >= 0; i--) {
+      const f = snow[i];
+      f.y += f.vy * dt; f.x += Math.sin(f.ph + t * 2) * 0.012 * dt;
+      if (f.y >= f.land) { settled.push({ x: f.x, y: f.land, r: f.r, age: 0 }); snow.splice(i, 1); }
+    }
+    for (let i = splash.length - 1; i >= 0; i--) { splash[i].age += dt; if (splash[i].age > 0.35) splash.splice(i, 1); }
+    for (let i = settled.length - 1; i >= 0; i--) { settled[i].age += dt; if (settled[i].age > 2.5) settled.splice(i, 1); }
+  }
+
+  function drawSun(t) {
+    const cx = 0.075 * W, cy = 0.16 * H, R = 5.2 * U, k = boost('evap') * focusAmt;
+    /* 바다를 데우는 햇살 */
+    for (let i = 0; i < 3; i++) {
+      const xa = (0.03 + i * 0.115) * W, xb = xa + 0.075 * W;
+      const g = ctx.createLinearGradient(cx, cy, (xa + xb) / 2, SEA * H);
+      const a = (0.2 + 0.22 * k) * (0.8 + 0.2 * Math.sin(t * 1.3 + i * 2));
+      g.addColorStop(0, 'rgba(255,214,90,' + a.toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,214,90,0.03)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(xa, SEA * H); ctx.lineTo(xb, SEA * H); ctx.closePath(); ctx.fill();
+    }
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.save();
+    ctx.rotate(t * 0.12);
+    ctx.strokeStyle = C.sunRay; ctx.lineCap = 'round'; ctx.lineWidth = 0.95 * U;
+    for (let i = 0; i < 12; i++) {
+      ctx.rotate(TAU / 12);
+      ctx.beginPath(); ctx.moveTo(R * 1.2, 0); ctx.lineTo(R * (1.4 + (i % 2) * 0.1), 0); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.fillStyle = C.sun; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+    ctx.fillStyle = C.sunCore; ctx.beginPath(); ctx.arc(-R * 0.1, -R * 0.1, R * 0.78, 0, TAU); ctx.fill();
+    ctx.fillStyle = C.cheek;
+    ctx.beginPath(); ctx.arc(-R * 0.55, R * 0.2, R * 0.15, 0, TAU); ctx.arc(R * 0.55, R * 0.2, R * 0.15, 0, TAU); ctx.fill();
+    ctx.fillStyle = C.face;
+    ctx.beginPath(); ctx.arc(-R * 0.32, -R * 0.1, R * 0.085, 0, TAU); ctx.arc(R * 0.32, -R * 0.1, R * 0.085, 0, TAU); ctx.fill();
+    ctx.strokeStyle = C.face; ctx.lineWidth = R * 0.09; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, R * 0.02, R * 0.4, Math.PI * 0.2, Math.PI * 0.8); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawSea(t) {
+    const x1 = 0.418 * W, y0 = SEA * H, step = Math.max(4, U * 0.6);
+    const edge = (px, base, amp) => base + Math.sin(px / U * 0.3 + t * 1.1) * amp * U + Math.sin(px / U * 0.11 - t * 0.6) * amp * 0.8 * U;
+    const body = (base, amp) => {
+      ctx.beginPath(); ctx.moveTo(0, H + 2);
+      for (let px = 0; px < x1; px += step) ctx.lineTo(px, edge(px, base, amp));
+      ctx.lineTo(x1, edge(x1, base, amp)); ctx.lineTo(x1, H + 2); ctx.closePath();
+    };
+    const g = ctx.createLinearGradient(0, y0, 0, H);
+    g.addColorStop(0, C.seaTop); g.addColorStop(1, C.seaDeep);
+    body(y0, 0.22); ctx.fillStyle = g; ctx.fill();
+    ctx.fillStyle = C.seaBand;
+    body(y0 + 0.1 * H, 0.4); ctx.fill();
+    body(y0 + 0.2 * H, 0.5); ctx.fill();
+    ctx.strokeStyle = C.foam; ctx.lineWidth = 0.26 * U; ctx.lineCap = 'round';
+    for (let i = 0; i < 12; i++) {
+      const row = i % 4;
+      const yy = y0 + (0.035 + row * 0.065 + ((i * 7) % 3) * 0.012) * H;
+      const xx = (((i * 0.173 + t * 0.012 * (1 + row * 0.3)) % 1) * 0.46 - 0.03) * W;
+      const wv = (1.6 + row * 0.5) * U;
+      ctx.beginPath(); ctx.moveTo(xx - wv, yy);
+      ctx.quadraticCurveTo(xx - wv / 2, yy - wv * 0.35, xx, yy);
+      ctx.quadraticCurveTo(xx + wv / 2, yy - wv * 0.35, xx + wv, yy);
+      ctx.stroke();
+    }
+  }
+
+  function drawBoat(t) {
+    const s = 1.5 * U;
+    ctx.save();
+    ctx.translate(0.245 * W, (SEA + 0.05) * H + Math.sin(t * 1.3) * 0.22 * U);
+    ctx.rotate(Math.sin(t * 1.1) * 0.05);
+    ctx.fillStyle = C.sail; ctx.beginPath(); ctx.moveTo(0.05 * s, -s * 2.6); ctx.lineTo(s * 1.25, -s * 0.5); ctx.lineTo(0.05 * s, -s * 0.5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = C.sun; ctx.beginPath(); ctx.moveTo(-s * 0.18, -s * 2.1); ctx.lineTo(-s * 0.18, -s * 0.5); ctx.lineTo(-s * 0.95, -s * 0.5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = C.mast; ctx.fillRect(-s * 0.09, -s * 2.7, s * 0.14, s * 2.4);
+    ctx.fillStyle = C.hull; ctx.beginPath(); ctx.moveTo(-s * 1.5, -s * 0.4); ctx.lineTo(s * 1.6, -s * 0.4); ctx.lineTo(s * 1.05, s * 0.35); ctx.lineTo(-s, s * 0.35); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawMouth(t) {
+    const m = riv[riv.length - 1];
+    ctx.strokeStyle = C.foam; ctx.lineWidth = 0.2 * U; ctx.lineCap = 'round';
+    for (let k = 0; k < 3; k++) {
+      const f = (t * 0.22 + k / 3) % 1;
+      ctx.globalAlpha = (1 - f) * 0.9;
+      ctx.beginPath(); ctx.arc(m.x + 0.5 * U, m.y, U * (1.6 + 3.2 * f), Math.PI * 0.62, Math.PI * 1.38); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawFlow(t) {
+    const b = boost('flow') * focusAmt, n = 18;
+    ctx.lineCap = 'round'; ctx.strokeStyle = '#ffffff';
+    for (let k = 0; k < n; k++) {
+      const f = (k / n + t * 0.06) % 1, p = riverAt(f);
+      const lane = (((k * 7) % 5) - 2) / 2 * 0.5 * p.w;
+      const cx = p.x + Math.cos(p.ang + Math.PI / 2) * lane, cy = p.y + Math.sin(p.ang + Math.PI / 2) * lane;
+      const len = U * (0.45 + 1.1 * f), ux = Math.cos(p.ang), uy = Math.sin(p.ang);
+      ctx.globalAlpha = Math.pow(Math.sin(Math.PI * f), 0.6) * (0.7 + 0.3 * b);
+      ctx.lineWidth = U * (0.12 + 0.16 * f) * (1 + 0.5 * b);
+      ctx.beginPath(); ctx.moveTo(cx - ux * len, cy - uy * len); ctx.lineTo(cx + ux * len, cy + uy * len); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawVapor(t) {
+    const be = boost('evap') * focusAmt, bc = boost('cond') * focusAmt;
+    for (const v of vapor) {
+      const c = smooth(0.47, 0.38, v.y);
+      const x = v.x * W, y = v.y * H;
+      const r = U * lerp(0.52, 0.4, c) * (1 + 0.3 * lerp(be, bc, c));
+      ctx.globalAlpha = Math.min(1, v.age / 0.7) * lerp(0.85, 1, c);
+      const edge = mix(C.vaporEdge, C.dropEdge, c);
+      if (c < 0.6) {
+        const sw = Math.sin(t * 4 + v.ph);
+        ctx.strokeStyle = edge; ctx.lineWidth = U * 0.13; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x, y + r * 1.5);
+        ctx.quadraticCurveTo(x + r * 0.9 * sw, y + r * 2.3, x, y + r * 3.1); ctx.stroke();
+      }
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU);
+      ctx.fillStyle = mix(C.vapor, C.drop, c); ctx.fill();
+      ctx.lineWidth = U * lerp(0.1, 0.17, c); ctx.strokeStyle = edge; ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawPrecip() {
+    const b = boost('precip') * focusAmt;
+    ctx.beginPath();
+    for (const r of rain) { const x = r.x * W, y = r.y * H; ctx.moveTo(x, y); ctx.lineTo(x - 0.22 * U, y - 1.7 * U); }
+    ctx.lineCap = 'round'; ctx.lineWidth = U * (0.34 + 0.1 * b); ctx.strokeStyle = C.rain; ctx.stroke();
+
+    ctx.lineWidth = U * 0.16; ctx.strokeStyle = C.splash;
+    for (const s of splash) {
+      const k = s.age / 0.35;
+      ctx.globalAlpha = 1 - k;
+      ctx.beginPath(); ctx.ellipse(s.x * W, s.y * H, U * (0.3 + 1.1 * k), U * (0.12 + 0.4 * k), 0, Math.PI, TAU); ctx.stroke();
+    }
+    ctx.fillStyle = C.snow;
+    for (const s of settled) {
+      ctx.globalAlpha = 0.9 * (1 - s.age / 2.5);
+      ctx.beginPath(); ctx.ellipse(s.x * W, s.y * H, s.r * U * 1.3, s.r * U * 0.7, 0, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.beginPath();
+    for (const f of snow) {
+      const x = f.x * W, y = f.y * H, r = f.r * U * (1 + 0.25 * b);
+      ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, TAU);
+    }
+    ctx.fillStyle = C.snow; ctx.fill();
+    ctx.lineWidth = U * 0.13; ctx.strokeStyle = C.snowEdge; ctx.stroke();
+  }
+
+  const LOBES = [[-5.4, 0.7, 2.7], [-2.9, -1.2, 3.5], [0.7, -2.3, 4.1], [4.1, -0.6, 3.2], [6.1, 1.1, 2.3]];
+  function cloudShape(s) {
+    ctx.beginPath();
+    for (const l of LOBES) { ctx.moveTo((l[0] + l[2]) * s, l[1] * s); ctx.arc(l[0] * s, l[1] * s, l[2] * s, 0, TAU); }
+    const bx = -7.9 * s, by = 0.3 * s, bw = 16.2 * s, bh = 3.1 * s, br = 1.55 * s;
+    ctx.moveTo(bx + br, by);
+    ctx.lineTo(bx + bw - br, by);
+    ctx.arc(bx + bw - br, by + br, br, -Math.PI / 2, Math.PI / 2);
+    ctx.lineTo(bx + br, by + bh);
+    ctx.arc(bx + br, by + br, br, Math.PI / 2, Math.PI * 1.5);
+    ctx.closePath();
+  }
+  function drawClouds() {
+    for (const c of clouds) {
+      if (c.a <= 0.01) continue;
+      const s = 0.76 * U * c.s;
+      ctx.save();
+      ctx.translate(c.x * W, c.y * H);
+      ctx.globalAlpha = c.a;
+      ctx.shadowColor = C.paperShadow; ctx.shadowBlur = 1.2 * U * DPR; ctx.shadowOffsetY = 0.3 * U * DPR;
+      ctx.translate(0, 0.75 * s);
+      cloudShape(s); ctx.fillStyle = mix(C.cloudUnder, C.cloudUnderDark, c.dark); ctx.fill();
+      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+      ctx.translate(0, -0.75 * s);
+      cloudShape(s); ctx.fillStyle = mix(C.cloud, C.cloudDark, c.dark); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /* ── 강조: 고른 단계만 환하게, 나머지는 살짝 어둡게 ── */
+  function spotFor(key) {
+    if (key === 'evap') return { x: 0.19 * W, y: 0.5 * H, a: 0.26 * W, b: 0.37 * H, r: 0 };
+    if (key === 'cond') return { x: 0.28 * W, y: 0.21 * H, a: 0.25 * W, b: 0.24 * H, r: 0 };
+    if (key === 'precip') return { x: 0.69 * W, y: 0.43 * H, a: 0.26 * W, b: 0.37 * H, r: 0 };
+    const dx = 0.52 * W, dy = -0.46 * H;
+    return { x: 0.54 * W, y: 0.66 * H, a: Math.hypot(dx, dy) * 0.62, b: 0.18 * H, r: Math.atan2(dy, dx) };
+  }
+  function drawVeil() {
+    if (focusAmt < 0.01 || !spot) return;
+    ctx.save();
+    ctx.translate(spot.x, spot.y); ctx.rotate(spot.r); ctx.scale(spot.a, spot.b);
+    const g = ctx.createRadialGradient(0, 0, 0.74, 0, 0, 1.12);
+    g.addColorStop(0, 'rgba(' + C.veil + ',0)');
+    g.addColorStop(1, 'rgba(' + C.veil + ',' + (0.5 * focusAmt).toFixed(3) + ')');
+    ctx.fillStyle = g;
+    const big = (W + H) * 4 / Math.max(1, Math.min(spot.a, spot.b));
+    ctx.fillRect(-big, -big, big * 2, big * 2);
+    ctx.restore();
+  }
+  function arrow(x, y, ang, size, color, alpha) {
+    if (alpha <= 0.01) return;
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(ang); ctx.globalAlpha = Math.min(1, alpha);
+    ctx.beginPath();
+    ctx.moveTo(-size * 1.1, -size * 0.28); ctx.lineTo(size * 0.1, -size * 0.28); ctx.lineTo(size * 0.1, -size * 0.72);
+    ctx.lineTo(size * 1.15, 0);
+    ctx.lineTo(size * 0.1, size * 0.72); ctx.lineTo(size * 0.1, size * 0.28); ctx.lineTo(-size * 1.1, size * 0.28);
+    ctx.closePath();
+    ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.lineWidth = size * 0.2; ctx.lineJoin = 'round'; ctx.strokeStyle = color; ctx.stroke();
+    ctx.restore();
+  }
+  function drawArrows(t) {
+    if (!focus || focusAmt < 0.02) return;
+    const col = STAGES[focus].color, A = focusAmt;
+    if (focus === 'evap') {
+      for (let k = 0; k < 3; k++) {
+        const f = (t * 0.2 + k / 3) % 1;
+        arrow((0.17 + k * 0.08) * W, lerp(0.64, 0.42, f) * H, -Math.PI / 2, 1.5 * U, col, Math.sin(Math.PI * f) * A);
+      }
+    } else if (focus === 'cond') {
+      for (const c of clouds) {
+        if (c.p < 0.03 || c.p > 0.36) continue;
+        for (let k = 0; k < 3; k++) {
+          const f = (t * 0.3 + k / 3) % 1, ang = Math.PI * (0.3 + k * 0.2);
+          const rad = lerp(10.5, 6.4, f) * U * (0.5 + 0.5 * c.s);
+          arrow(c.x * W + Math.cos(ang) * rad, c.y * H + Math.sin(ang) * rad, ang + Math.PI, 1.25 * U, col, Math.sin(Math.PI * f) * A * c.a);
+        }
+      }
+    } else if (focus === 'precip') {
+      for (const c of clouds) {
+        if (c.k < 0.2) continue;
+        const f = (t * 0.35 + c.off * 4) % 1;
+        arrow(c.x * W, c.y * H + lerp(6, 13, f) * U, Math.PI / 2, 1.5 * U, col, Math.sin(Math.PI * f) * A * c.k);
+      }
+    } else {
+      for (let k = 0; k < 3; k++) {
+        const f = (t * 0.08 + k / 3) % 1, p = riverAt(lerp(0.06, 0.97, f));
+        arrow(p.x, p.y, p.ang, U * lerp(0.9, 1.7, f), col, Math.sin(Math.PI * f) * A);
+      }
+    }
+  }
+
+  function render() {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(back, 0, 0, W, H);
+    drawSun(simT);
+    drawSea(simT);
+    drawBoat(simT);
+    ctx.drawImage(front, 0, 0, W, H);
+    drawMouth(simT);
+    drawFlow(simT);
+    drawVapor(simT);
+    drawPrecip();
+    drawClouds();
+    drawVeil();
+    drawArrows(simT);
+  }
+
+  /* ── 화면 크기에 맞추기 ── */
+  function resize() {
+    const r = scene.getBoundingClientRect();
+    const w = Math.max(50, r.width), h = Math.max(50, r.height), d = Math.min(2, window.devicePixelRatio || 1);
+    if (w === W && h === H && d === DPR) return;
+    W = w; H = h; DPR = d;
+    U = Math.min(W, H * 1.78) / 100;
+    for (const c of [canvas, back, front]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); }
+    buildRiver(); paintBack(); paintFront();
+    for (const c of clouds) cloudState(c, simT);
+    render();
+  }
+
+  /* ── 단추와 막대 ── */
+  const stageEls = Array.from(document.querySelectorAll('[data-stage]'));
+  const chip = $('chip'), chipNum = $('chip-num'), chipName = $('chip-name'), line = $('line');
+  function setFocus(key) {
+    focus = key && STAGES[key] ? key : null;
+    const st = focus ? STAGES[focus] : null;
+    scene.classList.toggle('has-focus', !!focus);
+    for (const el of stageEls) el.setAttribute('aria-pressed', String((el.dataset.stage || null) === focus));
+    chip.style.setProperty('--c', st ? st.color : 'var(--ink)');
+    chip.classList.toggle('has-num', !!st);
+    chipNum.hidden = !st;
+    chipNum.textContent = st ? st.num : '';
+    chipName.textContent = st ? st.name : '물의 순환';
+    line.textContent = st ? st.text : OVERVIEW;
+  }
+  for (const el of stageEls) {
+    el.addEventListener('click', () => {
+      const key = el.dataset.stage || null;
+      setFocus(key && key === focus ? null : key);
+    });
+  }
+
+  let speed = 1, paused = false;
+  const speedEl = $('speed'), speedOut = $('speed-out');
+  function readSpeed() {
+    speed = Math.pow(3, Number(speedEl.value) / 10);
+    const label = speed.toFixed(1) + '배';
+    speedOut.textContent = label;
+    speedEl.setAttribute('aria-valuetext', label);
+  }
+  speedEl.addEventListener('input', readSpeed);
+
+  const pauseBtn = $('pause'), pauseLabel = $('pause-label'), icoPause = $('ico-pause'), icoPlay = $('ico-play');
+  function setPaused(v) {
+    paused = v;
+    pauseBtn.dataset.paused = String(v);
+    pauseLabel.textContent = v ? '움직이기' : '멈춤';
+    icoPause.hidden = v;
+    icoPlay.hidden = !v;
+  }
+  pauseBtn.addEventListener('click', () => setPaused(!paused));
+
+  const fullBtn = $('full'), fullLabel = $('full-label'), root = document.documentElement;
+  if (!document.fullscreenEnabled || !root.requestFullscreen) {
+    fullBtn.hidden = true;
+  } else {
+    fullBtn.addEventListener('click', () => {
+      const p = document.fullscreenElement ? document.exitFullscreen() : root.requestFullscreen();
+      if (p && p.catch) p.catch(() => {});
+    });
+    document.addEventListener('fullscreenchange', () => {
+      fullLabel.textContent = document.fullscreenElement ? '화면 줄이기' : '전체 화면';
+    });
+  }
+
+  /* 글쇠: 1~4 단계, 0 전체 보기, 스페이스 멈춤 */
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = e.target && e.target.tagName;
+    if (e.key >= '1' && e.key <= '4') {
+      const key = ORDER[Number(e.key) - 1];
+      setFocus(focus === key ? null : key);
+    } else if (e.key === '0' || e.key === 'Escape') {
+      setFocus(null);
+    } else if (e.key === ' ' && tag !== 'BUTTON' && tag !== 'INPUT') {
+      e.preventDefault();
+      setPaused(!paused);
+    }
+  });
+
+  /* ── 돌리기 ── */
+  let last = 0;
+  function frame(now) {
+    const real = last ? Math.min(0.05, (now - last) / 1000) : 0;
+    last = now;
+    const dt = paused ? 0 : real * speed;
+    simT += dt;
+    update(dt);
+    const ease = 1 - Math.exp(-real * 7);
+    if (focus) {
+      const target = spotFor(focus);
+      if (!spot) spot = target;
+      else for (const k in target) spot[k] += (target[k] - spot[k]) * ease;
+      focusAmt += (1 - focusAmt) * ease;
+    } else {
+      focusAmt -= focusAmt * ease;
+    }
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(scene);
+  window.addEventListener('resize', resize);
+
+  /* 처음 화면부터 구름·비·눈이 다 보이도록 미리 조금 돌려 둔다 */
+  for (let i = 0; i < 420; i++) { simT += 0.08; update(0.08); }
+
+  readSpeed();
+  setFocus(null);
+  setPaused(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  render();
+  requestAnimationFrame(frame);
+})();
+</script>
+</html>

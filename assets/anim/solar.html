@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>태양계 행성의 공전</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@500;600&family=Jua&display=swap">
+<style>
+/* 배치: 화면을 가득 채운 우주 무대(타원 궤도) + 아래쪽에 해설 한 줄과 조작 단추를 모은 도크 */
+:root {
+  color-scheme: dark;
+  --space: #050816;
+  --space-2: #111a40;
+  --panel: #0a1029;
+  --raise: #162150;
+  --line: #2b3868;
+  --star: #f5f2e7;
+  --dust: #a7b0d4;
+  --sun: #ffc247;
+  --ink: #2a1a00;
+  --font-display: "Jua", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --font-body: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --gutter: clamp(16px, 1.8vw, 70px);
+  --fs-small: clamp(11px, 0.92vw, 36px);
+  --fs-ctl: clamp(15px, 1.3vw, 50px);
+  --fs-desc: clamp(16px, 1.75vw, 68px);
+  --fs-name: clamp(26px, 3.1vw, 120px);
+  --ctl-h: clamp(44px, 3.3vw, 128px);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--space);
+  color: var(--star);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: var(--fs-ctl);
+  word-break: keep-all;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { height: 100%; display: flex; flex-direction: column; }
+
+/* ── 우주 무대 ─────────────────────────────── */
+.stage { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#sky { touch-action: manipulation; outline: none; -webkit-tap-highlight-color: transparent; }
+#sky:focus-visible { outline: 3px solid var(--sun); outline-offset: -5px; }
+
+.title, .clock { position: absolute; top: clamp(12px, 1.5vw, 56px); pointer-events: none; }
+.title { left: max(var(--gutter), env(safe-area-inset-left, 0px)); }
+.clock { right: max(var(--gutter), env(safe-area-inset-right, 0px)); text-align: right; }
+.eyebrow, .clock-label {
+  display: block;
+  margin: 0 0 0.2em;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--dust);
+}
+.title h1 {
+  margin: 0;
+  font: 400 clamp(20px, 2.3vw, 90px) / 1.15 var(--font-display);
+  color: var(--star);
+}
+.clock-value {
+  display: block;
+  font: 400 clamp(18px, 2vw, 78px) / 1.15 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--sun);
+}
+
+/* ── 도크 ─────────────────────────────────── */
+.dock {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 0.8vw, 32px);
+  padding-block: clamp(10px, 1vw, 40px);
+  padding-left: max(var(--gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--gutter), env(safe-area-inset-right, 0px));
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+
+.caption {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: clamp(14px, 1.7vw, 66px);
+  min-height: calc(var(--fs-desc) * 2.7);
+}
+.cap-name {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  margin: 0;
+  font: 400 var(--fs-name) / 1.1 var(--font-display);
+  white-space: nowrap;
+}
+.cap-dot {
+  flex: none;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: var(--dot, var(--sun));
+  box-shadow: 0 0 0.45em var(--dot, var(--sun));
+}
+.cap-desc {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--fs-desc);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+.caption.is-empty .cap-desc { color: var(--dust); }
+.cap-chip {
+  padding: 0.3em 0.9em;
+  border: 1.5px solid var(--sun);
+  border-radius: 999px;
+  font-size: clamp(13px, 1.25vw, 48px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--sun);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(10px, 1.3vw, 50px);
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  min-height: var(--ctl-h);
+  padding: 0 1.15em;
+  border: 1.5px solid var(--line);
+  border-radius: 0.65em;
+  background: var(--raise);
+  color: var(--star);
+  font: 600 1em / 1 var(--font-body);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--dust); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { color: var(--dust); cursor: default; }
+.btn svg { flex: none; width: 1.05em; height: 1.05em; fill: currentColor; }
+.btn-main {
+  min-width: 7.4em;
+  border-color: var(--sun);
+  background: var(--sun);
+  color: var(--ink);
+}
+.btn-main:hover { border-color: var(--star); }
+.btn:focus-visible,
+.switch input:focus-visible,
+.speed input:focus-visible { outline: 3px solid var(--star); outline-offset: 3px; }
+
+.speed {
+  flex: 1 1 22em;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+}
+.speed-head { display: contents; }
+.speed label { order: 1; font-weight: 600; white-space: nowrap; }
+.speed-track {
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.speed-track span { font-size: 0.85em; white-space: nowrap; color: var(--dust); }
+.speed output {
+  order: 3;
+  min-width: 10.5em;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--sun);
+}
+
+.speed input {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--ctl-h);
+  margin: 0;
+  background: transparent;
+  font-size: 1em;
+  cursor: pointer;
+  border-radius: 999px;
+}
+.speed input::-webkit-slider-runnable-track {
+  height: 0.5em;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--sun) var(--p, 21%), var(--line) var(--p, 21%));
+}
+.speed input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 1.5em;
+  height: 1.5em;
+  margin-top: -0.5em;
+  border: 0.24em solid var(--sun);
+  border-radius: 50%;
+  background: var(--star);
+}
+.speed input::-moz-range-track { height: 0.5em; border-radius: 999px; background: var(--line); }
+.speed input::-moz-range-progress { height: 0.5em; border-radius: 999px; background: var(--sun); }
+.speed input::-moz-range-thumb {
+  width: 1.05em;
+  height: 1.05em;
+  border: 0.24em solid var(--sun);
+  border-radius: 50%;
+  background: var(--star);
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  min-height: var(--ctl-h);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.switch input {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 2.6em;
+  height: 1.5em;
+  margin: 0;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--line);
+  font-size: 1em;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.switch input::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0.16em;
+  width: 1.05em;
+  height: 1.05em;
+  border-radius: 50%;
+  background: var(--star);
+  transform: translateY(-50%);
+  transition: left 0.15s;
+}
+.switch input:checked { border-color: var(--sun); background: var(--sun); }
+.switch input:checked::after { left: calc(100% - 1.21em); background: var(--ink); }
+
+.note { margin: 0; font-size: var(--fs-small); line-height: 1.5; color: var(--dust); }
+
+@media (max-width: 900px) {
+  .caption { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; min-height: 0; }
+  .cap-desc { grid-column: 1 / -1; grid-row: 2; min-height: 2.7em; }
+}
+@media (max-width: 700px) {
+  .speed { order: 5; flex-basis: 100%; flex-direction: column; align-items: stretch; gap: 0; }
+  .speed-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .speed output { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .switch input, .switch input::after { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="stage" id="stage">
+    <canvas id="stars" aria-hidden="true"></canvas>
+    <canvas id="sky" tabindex="0" role="img" aria-label="태양 둘레를 도는 여덟 행성. 행성이나 태양을 누르면 이름과 설명이 나옵니다. 좌우 화살표 키로 차례대로 고를 수 있습니다."></canvas>
+    <header class="title" id="title">
+      <p class="eyebrow">5학년 과학 · 태양계와 별</p>
+      <h1>태양계 행성의 공전</h1>
+    </header>
+    <div class="clock" id="clockBox">
+      <span class="clock-label">지구 시간으로 흐른 시간</span>
+      <span class="clock-value" id="clock">0년 0일</span>
+    </div>
+  </main>
+
+  <footer class="dock">
+    <section class="caption is-empty" id="caption" aria-live="polite">
+      <h2 class="cap-name"><span class="cap-dot" id="capDot" hidden></span><span id="capName">행성을 눌러 보세요</span></h2>
+      <p class="cap-desc" id="capDesc">움직이는 행성이나 태양을 누르면 이름과 설명이 나와요.</p>
+      <span class="cap-chip" id="capChip" hidden></span>
+    </section>
+
+    <div class="controls">
+      <button class="btn btn-main" id="pause" type="button" aria-pressed="false">
+        <svg id="icoPause" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="5" height="16" rx="1.2"></rect><rect x="14" y="4" width="5" height="16" rx="1.2"></rect></svg>
+        <svg id="icoPlay" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"></path></svg>
+        <span id="pauseText">멈춤</span>
+      </button>
+
+      <div class="speed">
+        <div class="speed-head">
+          <label for="speed">빠르기</label>
+          <output id="speedOut" for="speed">지구 한 바퀴에 6초</output>
+        </div>
+        <div class="speed-track">
+          <span aria-hidden="true">느리게</span>
+          <input type="range" id="speed" min="1" max="20" step="1" value="5">
+          <span aria-hidden="true">빠르게</span>
+        </div>
+      </div>
+
+      <label class="switch"><input type="checkbox" id="names" role="switch" checked><span>행성 이름</span></label>
+
+      <button class="btn" id="fs" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5v2H6v3H4zm11-5h5v5h-2V6h-3V4zM4 15h2v3h3v2H4v-5zm14 3v-3h2v5h-5v-2h3z"></path></svg>
+        <span id="fsText">전체 화면</span>
+      </button>
+    </div>
+
+    <p class="note" id="note">행성의 크기와 태양까지의 거리는 보기 쉽게 줄여서 그렸어요. 행성들이 도는 빠르기의 비율은 실제와 같아요.</p>
+  </footer>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  document.documentElement.lang = 'ko';
+
+  const TAU = Math.PI * 2;
+  const YEAR = 365.256;            // 지구의 공전 주기(일)
+  const MOON_DAYS = 27.322;        // 달이 지구 둘레를 한 바퀴 도는 데 걸리는 날수
+  const STAR = '#f5f2e7';
+  const GOLD = '#ffc247';
+  const NOTE = '행성의 크기와 태양까지의 거리는 보기 쉽게 줄여서 그렸어요. 행성들이 도는 빠르기의 비율은 실제와 같아요.';
+
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const font = (px) => `400 ${px}px Jua, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`;
+
+  const stage = $('stage'), stars = $('stars'), sky = $('sky');
+  const sctx = stars.getContext('2d'), ctx = sky.getContext('2d');
+
+  // 행성 겉모습을 그리는 작은 도구 (좌표는 행성 반지름에 대한 비율)
+  const blob = (x, y, r, bx, by, brx, bry, color) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.ellipse(x + bx * r, y + by * r, brx * r, bry * r, 0, 0, TAU);
+    ctx.fill();
+  };
+  const band = (x, y, r, by, bh, color) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(x - r, y + (by - bh / 2) * r, 2 * r, bh * r);
+  };
+
+  const SUN = {
+    name: '태양', color: GOLD, chip: '태양계에 하나뿐인 별',
+    desc: '태양계의 중심에 있고, 스스로 빛을 내는 별이에요.'
+  };
+
+  // days  : 태양 둘레를 한 바퀴 도는 데 걸리는 날수(실제 값)
+  // orbit : 화면에서의 궤도 크기, size : 화면에서의 행성 크기 (둘 다 보기 쉽게 줄인 값)
+  const PLANETS = [
+    { name: '수성', days: 87.969, period: '약 88일', orbit: 0.16, size: 0.67, start: 0.6, color: '#aaa49b',
+      desc: '태양에 가장 가까이 있고, 태양계에서 가장 작은 행성이에요.',
+      paint(x, y, r) { blob(x, y, r, -0.3, -0.2, 0.28, 0.24, '#8b857d'); blob(x, y, r, 0.35, 0.3, 0.2, 0.18, '#8b857d'); } },
+    { name: '금성', days: 224.701, period: '약 225일', orbit: 0.235, size: 0.98, start: 2.4, color: '#e9ca8d',
+      desc: '두꺼운 대기에 싸여 있어 태양계에서 가장 뜨거운 행성이에요.',
+      paint(x, y, r) { band(x, y, r, -0.3, 0.22, '#f4ddab'); band(x, y, r, 0.4, 0.2, '#d8b572'); } },
+    { name: '지구', days: 365.256, period: '약 365일(1년)', orbit: 0.315, size: 1, start: 4.0, color: '#3f86e0',
+      desc: '우리가 사는 행성으로, 물과 공기가 있어 생물이 살 수 있어요.',
+      paint(x, y, r) { blob(x, y, r, -0.3, -0.15, 0.36, 0.3, '#5ab562'); blob(x, y, r, 0.4, 0.4, 0.26, 0.2, '#5ab562'); blob(x, y, r, 0, -0.92, 0.5, 0.18, '#eef6ff'); } },
+    { name: '화성', days: 686.98, period: '약 687일(1.9년)', orbit: 0.395, size: 0.77, start: 5.3, color: '#d2613b',
+      desc: '표면이 붉은색으로 보이고, 지름이 지구의 절반쯤 되는 행성이에요.',
+      paint(x, y, r) { blob(x, y, r, 0.2, 0.2, 0.4, 0.26, '#a9472b'); blob(x, y, r, 0, -0.9, 0.42, 0.18, '#f6ece6'); } },
+    { name: '목성', days: 4332.589, period: '약 11.9년', orbit: 0.545, size: 2.75, start: 1.1, color: '#e0c29c',
+      desc: '태양계에서 가장 큰 행성으로, 줄무늬와 커다란 붉은 점이 보여요.',
+      paint(x, y, r) { band(x, y, r, -0.48, 0.2, '#b9875c'); band(x, y, r, 0.1, 0.16, '#c99b70'); band(x, y, r, 0.58, 0.2, '#b07f58'); blob(x, y, r, 0.3, 0.34, 0.2, 0.12, '#c4523a'); } },
+    { name: '토성', days: 10759.22, period: '약 29.5년', orbit: 0.72, size: 2.55, start: 3.2, color: '#e7d29d', ring: true,
+      desc: '얼음과 암석 조각으로 이루어진 크고 뚜렷한 고리가 있어요.',
+      paint(x, y, r) { band(x, y, r, -0.28, 0.16, '#cfb67c'); band(x, y, r, 0.32, 0.16, '#cfb67c'); } },
+    { name: '천왕성', days: 30685.4, period: '약 84년', orbit: 0.87, size: 1.8, start: 4.7, color: '#9fe3e4',
+      desc: '청록색으로 보이고, 옆으로 누운 채 태양 둘레를 도는 행성이에요.' },
+    { name: '해왕성', days: 60189, period: '약 165년', orbit: 1, size: 1.77, start: 0.2, color: '#3f63d6',
+      desc: '태양에서 가장 멀리 있는 파란색 행성으로, 매우 춥고 바람이 세게 불어요.',
+      paint(x, y, r) { band(x, y, r, -0.3, 0.14, '#6f8ff0'); blob(x, y, r, 0.25, 0.3, 0.26, 0.14, '#2c4bb0'); } }
+  ];
+
+  // ── 상태 ──────────────────────────────────
+  const EARTH = 3;                                     // sel·spots에서 지구의 번호
+  const paintMoon = (x, y, r) => {
+    blob(x, y, r, -0.25, -0.2, 0.3, 0.25, '#aeaaa2');
+    blob(x, y, r, 0.3, 0.3, 0.22, 0.18, '#aeaaa2');
+  };
+
+  let W = 1, H = 1, dpr = 1, cx = 0, cy = 0, rx = 1, ry = 1, unit = 1, k = 1, labelSize = 12;
+  let inset = null;                                    // 지구와 달을 크게 보여 주는 둥근 창 {x, y, r}
+  let simDays = 0;
+  let earthSec = 6;                                    // 지구가 한 바퀴 도는 데 걸리는 화면 시간(초)
+  let paused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let showNames = true;
+  let sel = -1;                                        // -1 없음, 0 태양, 1~8 행성
+  let last = 0;
+  let clockText = '';
+  const spots = [];                                    // 지금 화면에서의 위치 (0 태양, 1~8 행성)
+
+  // ── 배경 별 ───────────────────────────────
+  function mulberry32(a) {
+    return () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function drawStars() {
+    sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const g = sctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.72);
+    g.addColorStop(0, '#111a40');
+    g.addColorStop(1, '#050816');
+    sctx.fillStyle = g;
+    sctx.fillRect(0, 0, W, H);
+    const rnd = mulberry32(20261121);
+    const scale = clamp(W / 1400, 0.7, 2.4);
+    const tints = ['#ffffff', '#cfd9ff', '#ffe9c4'];
+    const n = Math.round(clamp((W * H) / 2600, 120, 1400));
+    for (let i = 0; i < n; i++) {
+      const x = rnd() * W, y = rnd() * H;
+      const big = rnd() < 0.07;
+      const r = (big ? 1.3 + rnd() * 1.1 : 0.35 + rnd() * 0.8) * scale;
+      sctx.globalAlpha = 0.3 + rnd() * 0.7;
+      sctx.fillStyle = tints[Math.floor(rnd() * tints.length)];
+      sctx.beginPath();
+      sctx.arc(x, y, r, 0, TAU);
+      sctx.fill();
+    }
+    sctx.globalAlpha = 1;
+  }
+
+  // ── 화면 크기에 맞추기 ─────────────────────
+  const titleEl = $('title'), clockBox = $('clockBox'), noteEl = $('note');
+  function layout() {
+    const b = stage.getBoundingClientRect();
+    W = Math.max(1, b.width);
+    H = Math.max(1, b.height);
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    for (const c of [stars, sky]) {
+      c.width = Math.round(W * dpr);
+      c.height = Math.round(H * dpr);
+    }
+    cx = W / 2;
+    cy = H * 0.487;
+    rx = Math.max(50, W / 2 - Math.max(36, W * 0.045));
+    let lim = Math.min(H * 0.443, rx);
+    // 제목과 시계 글자를 가리지 않도록 타원의 세로 크기를 줄인다
+    const m = H * 0.04;
+    for (const el of [titleEl, clockBox]) {
+      const e = el.getBoundingClientRect();
+      const l = e.left - b.left, r = e.right - b.left;
+      const by = cy - (e.bottom - b.top) - m;
+      const bx = (l < cx && r > cx) ? 0 : Math.max(0, Math.min(Math.abs(l - cx), Math.abs(r - cx)) - m);
+      if (bx < rx) lim = Math.min(lim, Math.max(0, by) / Math.sqrt(1 - (bx / rx) ** 2));
+    }
+    ry = Math.max(30, lim);
+    rx = Math.min(rx, ry * 2.4);
+    unit = ry;
+    k = clamp(unit / 300, 0.8, 3);
+    labelSize = clamp(unit * 0.07, 12, 64);
+    fitInset();
+    const view = ry / rx < 0.9 ? '비스듬히 내려다본 모습이에요. ' : '위에서 내려다본 모습이에요. ';
+    if (noteEl.textContent !== view + NOTE) noteEl.textContent = view + NOTE;
+    drawStars();
+    draw();
+  }
+
+  // ── 그리기 ────────────────────────────────
+  // 오른쪽 아래 구석에서 행성 궤도를 가리지 않는 가장 큰 둥근 창의 크기를 찾는다
+  function fitInset() {
+    const pad = Math.max(8, H * 0.015);
+    const clear = (R) => {
+      const x0 = W - pad - R - cx, y0 = H - pad - R - cy;
+      for (let i = 0; i <= 24; i++) {
+        const t = Math.PI + (Math.PI / 2) * (i / 24);
+        const x = x0 + R * Math.cos(t), y = y0 + R * Math.sin(t);
+        if ((x / rx) ** 2 + (y / ry) ** 2 < 1.13) return false;
+      }
+      return true;
+    };
+    let lo = 0, hi = Math.min(W, H) * 0.2;
+    for (let i = 0; i < 12; i++) {
+      const mid = (lo + hi) / 2;
+      if (clear(mid)) lo = mid; else hi = mid;
+    }
+    inset = lo >= 34 ? { x: W - pad - lo, y: H - pad - lo, r: lo } : null;
+  }
+
+  function drawRing(x, y, r, front) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-0.4);
+    ctx.beginPath();
+    ctx.rect(-3 * r, front ? 0 : -3 * r, 6 * r, 3 * r);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 2.1 * r, 0.66 * r, 0, 0, TAU);
+    ctx.moveTo(1.38 * r, 0);
+    ctx.ellipse(0, 0, 1.38 * r, 0.43 * r, 0, 0, TAU);
+    ctx.fillStyle = 'rgba(230, 208, 152, 0.88)';
+    ctx.fill('evenodd');
+    ctx.restore();
+  }
+
+  // 공 모양 천체. (dx, dy)는 햇빛이 오는 방향
+  function drawBall(x, y, r, color, paint, dx, dy) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.clip();
+    ctx.fillStyle = color;
+    ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+    if (paint) paint(x, y, r);
+    // 태양을 향한 쪽은 밝게, 반대쪽은 어둡게
+    const d = Math.hypot(dx, dy) || 1;
+    const lx = x + (dx / d) * r * 0.55, ly = y + (dy / d) * r * 0.55;
+    const g = ctx.createRadialGradient(lx, ly, 0, lx, ly, r * 1.9);
+    g.addColorStop(0, 'rgba(255,255,255,0.55)');
+    g.addColorStop(0.3, 'rgba(255,255,255,0)');
+    g.addColorStop(0.62, 'rgba(4,7,24,0.35)');
+    g.addColorStop(1, 'rgba(4,7,24,0.85)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+    ctx.restore();
+  }
+
+  function drawPlanet(p, s) {
+    if (p.ring) drawRing(s.x, s.y, s.r, false);
+    drawBall(s.x, s.y, s.r, p.color, p.paint, cx - s.x, cy - s.y);
+    if (p.ring) drawRing(s.x, s.y, s.r, true);
+  }
+
+  // 달: (ex, ey)를 중심으로 가로 A, 세로 B인 길을 따라 지구와 같은 방향(시계 반대 방향)으로 돈다
+  // part: 'far' 지구 뒤쪽에 있을 때만, 'near' 앞쪽에 있을 때만, 'all' 항상
+  function drawMoon(ex, ey, A, B, mr, part, label) {
+    const a = 1 + (TAU * simDays) / MOON_DAYS;
+    const far = Math.sin(a) > 0;
+    if ((part === 'far' && !far) || (part === 'near' && far)) return;
+    const mx = ex + A * Math.cos(a), my = ey - B * Math.sin(a);
+    // 빠르게 돌 때 깜박여 보이지 않도록 지나온 길에 옅은 꼬리를 그린다
+    const tail = paused ? 0 : Math.min(5, ((TAU * YEAR) / earthSec / MOON_DAYS) * 0.045);
+    if (tail > 0.05) {
+      ctx.lineWidth = mr * 1.5;
+      for (let j = 0; j < 6; j++) {
+        ctx.beginPath();
+        ctx.ellipse(ex, ey, A, B, 0, -(a - (tail * j) / 6), -(a - (tail * (j + 1)) / 6));
+        ctx.strokeStyle = `rgba(214,210,200,${0.4 * (1 - j / 6)})`;
+        ctx.stroke();
+      }
+    }
+    const e = spots[EARTH];
+    drawBall(mx, my, mr, '#cfcbc2', paintMoon, cx - e.x, cy - e.y);
+    if (label) {
+      ctx.font = font(label);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = label * 0.3;
+      ctx.strokeStyle = 'rgba(5,8,22,0.9)';
+      ctx.strokeText('달', mx, my - mr - label * 0.12);
+      ctx.fillStyle = STAR;
+      ctx.fillText('달', mx, my - mr - label * 0.12);
+    }
+  }
+
+  // 지구를 골랐을 때: 지구와 달을 크게 보여 주는 둥근 창
+  function drawInset() {
+    const e = spots[EARTH];
+    const x = inset.x, y = inset.y, r = inset.r;
+    // 지구에서 창까지 이어지는 점선
+    const dx = x - e.x, dy = y - e.y, d = Math.hypot(dx, dy);
+    const from = e.r * 2.6 + 6;
+    if (d > r + from) {
+      ctx.beginPath();
+      ctx.moveTo(e.x + (dx / d) * from, e.y + (dy / d) * from);
+      ctx.lineTo(x - (dx / d) * r, y - (dy / d) * r);
+      ctx.strokeStyle = 'rgba(255,194,71,0.5)';
+      ctx.lineWidth = 1.2 * k;
+      ctx.setLineDash([5 * k, 6 * k]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fillStyle = 'rgba(10,16,41,0.95)';
+    ctx.fill();
+    ctx.strokeStyle = GOLD;
+    ctx.lineWidth = 1.8 * k;
+    ctx.stroke();
+
+    ctx.font = font(Math.max(11, r * 0.16));
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#a7b0d4';
+    ctx.fillText('지구와 달', x, y - r * 0.74);
+
+    // 달의 크기는 지구에 대한 실제 비율(지름 약 0.27배), 거리는 줄여서 그린다
+    const q = ry / rx;
+    const A = Math.min(0.8, 0.5 / q) * r, B = A * q;
+    const ey = y + r * 0.16, er = r * 0.24;
+    ctx.beginPath();
+    ctx.ellipse(x, ey, A, B, 0, 0, TAU);
+    ctx.strokeStyle = 'rgba(158,176,240,0.5)';
+    ctx.lineWidth = 1.2 * k;
+    ctx.stroke();
+    const earth = PLANETS[EARTH - 1];
+    drawBall(x, ey, er, earth.color, earth.paint, cx - e.x, cy - e.y);
+    drawMoon(x, ey, A, B, er * 0.273, 'all', Math.max(11, r * 0.17));
+  }
+
+  function draw() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // 궤도
+    PLANETS.forEach((p, i) => {
+      const on = sel === i + 1;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx * p.orbit, ry * p.orbit, 0, 0, TAU);
+      ctx.strokeStyle = on ? 'rgba(255,194,71,0.8)' : 'rgba(158,176,240,0.3)';
+      ctx.lineWidth = (on ? 2.2 : 1.2) * k;
+      ctx.stroke();
+    });
+
+    // 위치: 북쪽 위에서 내려다볼 때처럼 시계 반대 방향으로 돈다
+    const R = unit * 0.11;
+    spots[0] = { x: cx, y: cy, r: R, hit: R + 6 };
+    PLANETS.forEach((p, i) => {
+      const a = p.start + (TAU * simDays) / p.days;
+      const r = unit * 0.03 * p.size;
+      spots[i + 1] = {
+        x: cx + rx * p.orbit * Math.cos(a),
+        y: cy - ry * p.orbit * Math.sin(a),
+        r,
+        hit: Math.max(r * (p.ring ? 2.1 : 1) + 10, 26)
+      };
+    });
+
+    // 태양 빛무리
+    let g = ctx.createRadialGradient(cx, cy, R * 0.8, cx, cy, R * 3.4);
+    g.addColorStop(0, 'rgba(255,186,72,0.5)');
+    g.addColorStop(0.3, 'rgba(255,150,50,0.16)');
+    g.addColorStop(1, 'rgba(255,150,50,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 3.4, 0, TAU);
+    ctx.fill();
+
+    // 지구를 골랐을 때: 지구 둘레를 도는 달의 길과, 지구 뒤쪽을 지나는 달
+    const earthOn = sel === EARTH;
+    let mp = null;
+    if (earthOn) {
+      const e = spots[EARTH];
+      const A = e.r * 2.6;
+      mp = { A, B: A * (ry / rx), mr: Math.max(1.8, e.r * 0.3) };
+      ctx.beginPath();
+      ctx.ellipse(e.x, e.y, mp.A, mp.B, 0, 0, TAU);
+      ctx.strokeStyle = 'rgba(245,242,231,0.55)';
+      ctx.lineWidth = k;
+      ctx.stroke();
+      drawMoon(e.x, e.y, mp.A, mp.B, mp.mr, 'far');
+    }
+
+    // 태양 뒤쪽 행성 → 태양 → 앞쪽 행성
+    PLANETS.forEach((p, i) => { if (spots[i + 1].y < cy) drawPlanet(p, spots[i + 1]); });
+
+    g = ctx.createRadialGradient(cx - R * 0.25, cy - R * 0.3, R * 0.05, cx, cy, R);
+    g.addColorStop(0, '#fff7d6');
+    g.addColorStop(0.55, '#ffd257');
+    g.addColorStop(1, '#ff9a2b');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, TAU);
+    ctx.fill();
+    if (showNames) {
+      ctx.font = font(Math.max(11, R * 0.52));
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#5a2c00';
+      ctx.fillText('태양', cx, cy + R * 0.04);
+    }
+
+    PLANETS.forEach((p, i) => { if (spots[i + 1].y >= cy) drawPlanet(p, spots[i + 1]); });
+    if (earthOn) drawMoon(spots[EARTH].x, spots[EARTH].y, mp.A, mp.B, mp.mr, 'near');
+
+    // 고른 천체 둘레의 점선
+    const gap = Math.max(6, unit * 0.022);
+    if (sel >= 0 && !earthOn) {
+      const s = spots[sel];
+      const wide = sel > 0 && PLANETS[sel - 1].ring ? 2.2 : 1;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r * wide + gap, 0, TAU);
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = 2.4 * k;
+      ctx.setLineDash([7 * k, 6 * k]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // 이름표
+    if (showNames) {
+      ctx.font = font(labelSize);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = labelSize * 0.3;
+      ctx.strokeStyle = 'rgba(5,8,22,0.9)';
+      PLANETS.forEach((p, i) => {
+        const s = spots[i + 1];
+        const on = sel === i + 1;
+        let below = s.r;
+        if (on) below = i + 1 === EARTH ? Math.max(s.r, mp.B + mp.mr) + 2 : s.r + gap + 2;
+        const ty = s.y + below + labelSize * 0.3;
+        ctx.strokeText(p.name, s.x, ty);
+        ctx.fillStyle = on ? GOLD : STAR;
+        ctx.fillText(p.name, s.x, ty);
+      });
+    }
+
+    if (earthOn && inset) drawInset();
+  }
+
+  // ── 시간 흐름 ─────────────────────────────
+  const clockEl = $('clock');
+  function frame(t) {
+    const dt = Math.min((t - last) / 1000, 0.1);
+    last = t;
+    if (!paused && dt > 0) simDays += (dt * YEAR) / earthSec;
+    const text = `${Math.floor(simDays / YEAR)}년 ${Math.floor(simDays % YEAR)}일`;
+    if (text !== clockText) { clockText = text; clockEl.textContent = text; }
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  // ── 행성 고르기 ───────────────────────────
+  const caption = $('caption'), capName = $('capName'), capDesc = $('capDesc'), capChip = $('capChip'), capDot = $('capDot');
+  function select(i) {
+    sel = i;
+    if (i < 0) {
+      caption.classList.add('is-empty');
+      capName.textContent = '행성을 눌러 보세요';
+      capDesc.textContent = '움직이는 행성이나 태양을 누르면 이름과 설명이 나와요.';
+      capChip.hidden = true;
+      capDot.hidden = true;
+      return;
+    }
+    const body = i === 0 ? SUN : PLANETS[i - 1];
+    caption.classList.remove('is-empty');
+    capName.textContent = body.name;
+    capDesc.textContent = body.desc;
+    capChip.textContent = i === 0 ? body.chip : `한 바퀴 도는 데 ${body.period}`;
+    capChip.hidden = false;
+    capDot.style.setProperty('--dot', body.color);
+    capDot.hidden = false;
+  }
+
+  function hitTest(ev) {
+    const b = sky.getBoundingClientRect();
+    const px = ev.clientX - b.left, py = ev.clientY - b.top;
+    let best = -1, bestScore = 1;
+    spots.forEach((s, i) => {
+      const score = Math.hypot(px - s.x, py - s.y) / s.hit;
+      if (score <= bestScore) { bestScore = score; best = i; }
+    });
+    return best;
+  }
+
+  // 지구와 달 창을 누른 것은 빈 곳을 누른 것으로 치지 않는다
+  function inInset(ev) {
+    if (sel !== EARTH || !inset) return false;
+    const b = sky.getBoundingClientRect();
+    return Math.hypot(ev.clientX - b.left - inset.x, ev.clientY - b.top - inset.y) <= inset.r;
+  }
+  sky.addEventListener('click', (ev) => { if (!inInset(ev)) select(hitTest(ev)); });
+  sky.addEventListener('pointermove', (ev) => {
+    if (ev.pointerType === 'mouse') sky.style.cursor = hitTest(ev) >= 0 ? 'pointer' : 'default';
+  });
+  sky.addEventListener('keydown', (ev) => {
+    const total = PLANETS.length + 1;
+    if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') { select((sel + 1) % total); ev.preventDefault(); }
+    else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') { select((sel - 1 + total) % total); ev.preventDefault(); }
+    else if (ev.key === 'Escape') select(-1);
+  });
+
+  // ── 멈춤 단추 ─────────────────────────────
+  const pauseBtn = $('pause'), pauseText = $('pauseText'), icoPause = $('icoPause'), icoPlay = $('icoPlay');
+  function setPaused(v) {
+    paused = v;
+    pauseBtn.setAttribute('aria-pressed', String(v));
+    pauseText.textContent = v ? '움직이기' : '멈춤';
+    icoPause.toggleAttribute('hidden', v);
+    icoPlay.toggleAttribute('hidden', !v);
+  }
+  pauseBtn.addEventListener('click', () => setPaused(!paused));
+  document.addEventListener('keydown', (ev) => {
+    if (ev.code === 'Space' && !ev.target.closest('button, input, a')) {
+      ev.preventDefault();
+      setPaused(!paused);
+    }
+  });
+
+  // ── 빠르기 막대 ───────────────────────────
+  const speed = $('speed'), speedOut = $('speedOut');
+  function setSpeed() {
+    const v = Number(speed.value);
+    earthSec = 30 / v;
+    const sec = Number.isInteger(earthSec) ? String(earthSec) : earthSec.toFixed(1);
+    const text = `지구 한 바퀴에 ${sec}초`;
+    speedOut.textContent = text;
+    speed.setAttribute('aria-valuetext', text);
+    const p = ((v - Number(speed.min)) / (Number(speed.max) - Number(speed.min))) * 100;
+    speed.style.setProperty('--p', `${p}%`);
+  }
+  speed.addEventListener('input', setSpeed);
+
+  // ── 행성 이름 켜고 끄기 ────────────────────
+  const names = $('names');
+  names.addEventListener('change', () => { showNames = names.checked; });
+
+  // ── 전체 화면 ─────────────────────────────
+  const fsBtn = $('fs'), fsText = $('fsText'), root = document.documentElement;
+  function noFullscreen() { fsText.textContent = 'F11 키로 전체 화면'; fsBtn.disabled = true; }
+  if (!document.fullscreenEnabled || !root.requestFullscreen) noFullscreen();
+  fsBtn.addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await root.requestFullscreen();
+    } catch (err) {
+      noFullscreen();
+    }
+  });
+  document.addEventListener('fullscreenchange', () => {
+    fsText.textContent = document.fullscreenElement ? '전체 화면 끄기' : '전체 화면';
+  });
+
+  // ── 시작 ──────────────────────────────────
+  setPaused(paused);
+  setSpeed();
+  showNames = names.checked;
+  layout();
+  if ('ResizeObserver' in window) new ResizeObserver(layout).observe(stage);
+  else window.addEventListener('resize', layout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  requestAnimationFrame((t) => { last = t; requestAnimationFrame(frame); });
+})();
+</script>
+</body>
+</html>
